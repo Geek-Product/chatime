@@ -1,185 +1,291 @@
 # Team Chat
 
-Slack-style team discussion app: workspaces → channels → messages with threads and reactions,
-realtime delivery, unread badges, `@mentions`, and browser (Web Push) notifications.
+A Slack-style team discussion app. Workspaces contain channels and 1:1 direct messages; messages
+support threads, reactions, mentions, attachments, and Markdown. Everything is delivered in realtime,
+with unread badges and browser (Web Push) notifications.
 
-- **Backend**: Fastify 5 + TypeScript, PostgreSQL + Drizzle ORM, WebSocket hub, JWT auth, web-push
-- **Frontend**: React 19 + Vite + Tailwind v4 + TanStack Query
+## Stack
 
-## Quick start (development)
+| Layer | Technologies |
+| --- | --- |
+| **Backend** | Node.js, Fastify 5, TypeScript, Zod (validation), Drizzle ORM |
+| **Database** | PostgreSQL (schema managed by Drizzle Kit, no migration files — `db:push`) |
+| **Realtime** | `@fastify/websocket` hub (presence, fan-out, 30 s heartbeat) |
+| **Auth** | JWT access tokens (`jose`) + rotating refresh tokens in an HttpOnly cookie, Argon2 password hashes |
+| **Files** | `@fastify/multipart` uploads to disk, permission-checked downloads |
+| **Push** | `web-push` with VAPID keys + a service worker |
+| **Frontend** | React 19, Vite, TypeScript, Tailwind CSS v4 |
+| **Client data** | TanStack Query, React Router 7, sonner (toasts), lucide-react (icons) |
+| **Tooling** | npm workspaces, `tsx` (dev runner), `concurrently` |
+
+Requires: **Node.js 20+**, **PostgreSQL 14+** (running separately — see [Database](#database)).
+
+## Quick start
 
 ```bash
-cp .env.example .env
+cp .env.example .env     # then point DATABASE_URL at your Postgres
 npm install
-npm run gen:vapid          # writes VAPID keys into .env
-npm run dev                # API (:4000) + Vite (:5173); Postgres runs as a separate service
+npm run gen:vapid        # writes VAPID keys into .env (needed for desktop notifications)
+npm run dev              # API on :4000 + Vite on :5173
 ```
 
-In a second terminal, apply the schema and load demo data:
+In a second terminal, once Postgres is up:
 
 ```bash
-npm run db:push
-npm run db:seed
+npm run db:push          # create/update tables
+npm run db:seed          # demo users, workspace "Acme", channels
 ```
 
-Open http://localhost:5173 and sign in as `alice@example.com` or `bob@example.com` (password `password123`).
+Open http://localhost:5173 and sign in as `alice@example.com` or `bob@example.com` (password
+`password123`; `carol@example.com` works too, seeded as a regular member).
 
-### Database
+## Project layout
 
-Postgres is **not** part of `npm run dev` — it runs as its own native service, independent of the
-app process:
+```
+team-chat/
+├── package.json              # npm workspaces (server, web) + top-level scripts
+├── .env.example              # all configuration, documented
+│
+├── server/                   # Fastify API + WebSocket
+│   ├── env.ts                # Zod-validated process.env (loaded from ../.env)
+│   ├── drizzle.config.ts
+│   ├── scripts/
+│   │   ├── seed.ts           # demo data
+│   │   └── gen-vapid.ts      # writes VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY to .env
+│   ├── src/
+│   │   ├── index.ts          # entrypoint, graceful shutdown
+│   │   ├── app.ts            # plugins, error handler, route registration, SPA serving
+│   │   ├── db/
+│   │   │   ├── schema.ts     # tables, enums, relations (single source of truth)
+│   │   │   └── index.ts      # postgres client + Drizzle instance
+│   │   ├── lib/              # domain logic shared by routes
+│   │   │   ├── auth.ts       # JWT issue/verify, Argon2 hashing
+│   │   │   ├── access.ts     # workspace/channel membership checks
+│   │   │   ├── access-status.ts
+│   │   │   ├── chat.ts       # channel message history/listing
+│   │   │   ├── conversations.ts
+│   │   │   ├── messages.ts   # create/edit/delete, mentions, broadcasting
+│   │   │   ├── targets.ts    # resolve a message to its channel/DM audience
+│   │   │   ├── hub.ts        # WebSocket registry, presence, fan-out
+│   │   │   ├── unread.ts     # unread counts and last-read tracking
+│   │   │   ├── attachments.ts
+│   │   │   ├── push.ts       # Web Push delivery
+│   │   │   └── errors.ts     # HttpError
+│   │   ├── routes/           # HTTP endpoints + /ws, all mounted under /api
+│   │   │   ├── auth.ts          channels.ts   conversations.ts  messages.ts
+│   │   │   ├── notifications.ts push.ts       attachments.ts    workspaces.ts
+│   │   │   ├── access.ts        ws.ts
+│   │   └── types.d.ts        # Fastify decorators
+│   └── uploads/              # attachment storage (gitignored; path = UPLOAD_DIR)
+│
+└── web/                      # React single-page app
+    ├── vite.config.ts        # dev server :5173, proxies /api → :4000
+    ├── public/sw.js          # service worker (Web Push)
+    └── src/
+        ├── main.tsx          # providers: Query, Auth, Router, Theme, Profile
+        ├── App.tsx           # routes: /login, /welcome, /w/:wsId/(c|d)/:id, /mentions
+        ├── pages/
+        │   ├── ChatLayout.tsx       # main app shell
+        │   ├── LoginPage.tsx        # sign in / sign up
+        │   ├── AccessPendingPage.tsx# waiting-for-approval screen
+        │   └── MentionsView.tsx
+        ├── components/       # Sidebar, MessageList/Item/Text, Composer, ThreadPanel,
+        │                     # SettingsModal, MemberPicker, SignupsDialog, …
+        └── lib/
+            ├── api.ts        # fetch wrapper, token refresh, typed helpers
+            ├── socket.ts     # WebSocket client (API origin in dev, same origin in prod)
+            ├── useRealtime.tsx + usePresence / useAccessSocket
+            ├── auth-context.tsx, profile.tsx, theme.tsx, profile-settings.ts
+            ├── push.ts, sound.ts, presence.ts
+            ├── types.ts      # shared client-side types
+            └── useDismiss.ts
+```
 
-- The app uses the **local Postgres on `127.0.0.1:5432`**, database `team_chat`, user `postgres`
-  (see `DATABASE_URL` in `.env`). No other cluster is created or managed by this project.
-- Schema changes: `npm run db:push`; demo data: `npm run db:seed`
+## Scripts
 
-Manual queries go through `team-chat-db`:
+Run from the repository root.
+
+| Script | What it does |
+| --- | --- |
+| `npm run dev` | API (`tsx watch`) + Vite, side by side |
+| `npm run dev:api` / `dev:web` | Run just one of them |
+| `npm run db:push` | Push `server/src/db/schema.ts` to the database |
+| `npm run db:seed` | Create demo users, workspace "Acme", channels |
+| `npm run gen:vapid` | Generate Web Push keys into `.env` |
+| `npm run typecheck` | TypeScript check for web and server |
+| `npm run build` | Build the web app to `web/dist` |
+| `npm start` | Serve API + built web app from a single process |
+
+## Configuration
+
+All settings live in the root `.env` (see `.env.example`); the server validates them with Zod at boot.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PORT` | `4000` | API port |
+| `CLIENT_ORIGIN` | `http://localhost:5173` | CORS origin allowed in development |
+| `APP_URL` | `http://localhost:5173` | Base URL used in push notification deep links |
+| `NODE_ENV` | `development` | In `production`, the API also serves `web/dist` |
+| `DATABASE_URL` | `postgres://postgres:postgres@localhost:5433/team_chat` | Postgres connection |
+| `UPLOAD_DIR` | `server/uploads` | Attachment storage directory |
+| `UPLOAD_MAX_MB` | `25` | Max size per uploaded file (1–100) |
+| `JWT_SECRET` | dev placeholder | Access-token signing key (min. 16 chars) |
+| `ACCESS_TOKEN_TTL` | `15m` | Access-token lifetime |
+| `REFRESH_TOKEN_TTL_DAYS` | `30` | Refresh-token lifetime |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | — | Web Push credentials |
+
+Optional: `VITE_API_URL` (default `http://localhost:4000`) tells the dev client which API origin to
+use for the WebSocket. Vite's dev proxy drops WebSocket upgrades, so the socket connects directly to
+the API in development; in production everything shares one origin.
+
+## Database
+
+Postgres is **not** started by `npm run dev` — it is an independent service. The app only needs
+`DATABASE_URL`; any Postgres (system package, managed cloud instance, container) works.
+
+- Schema changes: edit `server/src/db/schema.ts`, then `npm run db:push`.
+- Drizzle Kit reads `DATABASE_URL` from the root `.env` (see `server/drizzle.config.ts`).
+- Demo data is idempotent — `db:seed` can be re-run safely.
+
+### Helper scripts on this machine
+
+The bundled `psql` cannot load here (`libldap.so.2` is missing) and Docker isn't available, so these
+wrappers in `~/.local/bin` use the app's own Node Postgres driver or the bundled `pg_dump`:
 
 ```bash
-team-chat-db -c 'select count(*) from messages'
-team-chat-db -f path/to/queries.sql
+team-chat-db -c 'select count(*) from messages'   # run a query
+team-chat-db -f path/to/queries.sql               # run a SQL file
+team-chat-dump                                    # backup -> ./team-chat-backup.sql
+team-chat-dump /path/to/backup.sql                # backup to a specific file
+team-chat-pgctl status                            # manage the local throwaway cluster
 ```
 
-On this machine the bundled `psql` cannot load (`libldap.so.2` is missing), and Docker isn't
-available, so the client scripts use the app's own Node Postgres driver / the bundled `pg_dump`.
+`team-chat-db` regenerates `~/.pgpass` (mode 600) from `DATABASE_URL` on every run. Because
+`~/.pgpass` is keyed by host/port/database, connecting to a *different* database needs `PGPASSWORD`
+or its own `.pgpass` line.
 
-Credentials come from `~/.pgpass` (mode 600), which `team-chat-db` regenerates from `DATABASE_URL`
-on every run. `~/.pgpass` is keyed to host/port/database, so connecting to a *different* database
-needs `PGPASSWORD` (or its own `.pgpass` line).
-
-Backups use `pg_dump`, not `psql` (there is no `\.dump` meta-command):
-
-```bash
-team-chat-dump                        # plain SQL -> ./team-chat-backup.sql
-team-chat-dump /path/to/backup.sql
-```
-
-Restore with any working Postgres `psql` against the local server (the bundled client cannot run
-here, so install the system package or use another machine's `psql`):
+Restore to a **new** database using any working `psql` (the bundled client can't run here):
 
 ```bash
 PGPASSWORD=… psql -h 127.0.0.1 -p 5432 -U postgres -d new_db -f team-chat-backup.sql
 ```
 
-`DATABASE_URL` in `.env` points at it. To use any other Postgres (system package, managed cloud
-instance, etc.), just change `DATABASE_URL` — nothing else in the app cares where it lives.
+## API overview
 
-## Scripts
+All HTTP routes are prefixed with `/api`. Requests need a `Bearer` access token unless noted.
+Errors are `{ "error": { "code": "…", "message": "…" } }`.
+`GET /api/health` returns `{ ok: true }` and needs no auth.
 
-| Script | What it does |
+| Area | Endpoints |
 | --- | --- |
-| `npm run dev` | API (`tsx watch`) + Vite dev server (Postgres is a separate service) |
-| `npm run dev:api` / `dev:web` | Run one piece |
-| `npm run db:push` | Push the Drizzle schema to the database |
-| `npm run db:seed` | Create demo users, workspace "Acme", channels |
-| `npm run gen:vapid` | Generate Web Push keys into `.env` |
-| `npm run typecheck` | TypeScript check for server and web |
-| `npm run build` | Build the web app to `web/dist` |
-| `npm start` | Serve API + built web app from one process |
+| **Auth** | `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`¹, `POST /auth/logout`¹, `GET /auth/me`, `PATCH /auth/me`, `POST /auth/password` |
+| **Access** | `GET /access/me`, `GET /access/workspaces`, `GET /workspaces/:id/access-requests`, `POST /workspaces/:id/access-requests/:userId/approve`, `…/decline` |
+| **Workspaces** | `GET /workspaces`, `POST /workspaces`, `PATCH /workspaces/:id`, `GET /workspaces/:id/members`, `GET /workspaces/:id/members/:userId` |
+| **Channels** | `GET/POST /workspaces/:id/channels`, `PATCH /channels/:id`, `POST /channels/:id/join`, `GET/POST /channels/:id/members`, `DELETE /channels/:id/members/:userId`, `GET /channels/:id/members`, `POST /channels/:id/read`, `GET /channels/:id/messages`, `GET /channels/:id/history` |
+| **DMs** | `GET/POST /workspaces/:id/conversations`, `POST /dms/:id/read`, `GET /dms/:id/messages`, `GET /dms/:id/history` |
+| **Messages** | `POST /messages`, `PATCH /messages/:id`, `DELETE /messages/:id`, `GET /messages/:id`, `GET /messages/:id/replies`, `GET /messages/:id/location`, `POST /messages/:id/reactions` |
+| **Notifications** | `GET /notifications/mentions`, `POST /notifications/read`, `DELETE /notifications/mentions/:messageId`, `GET /unread` |
+| **Push** | `GET /push/key`, `POST /push/subscribe`, `DELETE /push/subscribe` |
+| **Attachments** | `GET /attachments/limits`, `POST /attachments`, `GET /attachments/:id`, `DELETE /attachments/:id` |
+| **Realtime** | `GET /ws?token=…` (WebSocket) |
 
-## Sign-ups and approval
+¹ Uses the refresh-token cookie instead of the `Authorization` header.
 
-New accounts don't get into a workspace on their own. After **Sign up** they land on a waiting
-screen that explains the next step and updates itself (realtime `access.changed`) — no blank page.
-Sign-up requests are collected server-wide in `join_requests`.
+### WebSocket
 
-Workspace owners and admins see a **Sign-ups** entry in the sidebar with a badge for the number of
-people waiting. The dialog lists each applicant (name, handle, email, when they asked, and their
-optional "Who invited you" note) with **Accept** / **Decline**:
+Connect to `/api/ws?token=<accessToken>`. The server sends a `hello` frame with the user's
+workspaces, unread counts, and online users, then pushes events:
 
-- Accept (`POST /workspaces/:id/access-requests/:userId/approve`) adds them to that workspace as a
-  member, joins them to `#general`, and the waiting tab switches straight into the app.
-- Decline (`.../decline`) shows "Your sign-up wasn't approved" and blocks logging in
-  (`403 SIGNUP_DECLINED`) until an admin approves them later.
+`message.created`, `message.updated`, `message.deleted`, `reaction.updated`, `channel.created`,
+`channel.updated`, `conversation.created`, `member.joined`, `user.updated`, `presence`,
+`access.changed`, `notification`. Clients may send `{ "type": "ping" }` to get a `pong`; the server
+heartbeats every 30 s.
 
-Waiting users are only listed while they belong to no workspace, so approved people drop off the
-list automatically.
+## Features
 
-## Direct messages
+### Sign-ups and approval
 
-Click **+** next to "Direct messages" in the sidebar, pick a teammate, and chat 1:1. A conversation is
-one pair of workspace members, so opening it again from either side reuses the same thread
-(`POST /workspaces/:id/conversations` is idempotent). Only the two participants can read it — other
-members get `403` and never see the conversation in their list. DMs have their own unread badges,
-online presence dots, sidebar previews, and the same realtime delivery, reactions, edit/delete and
-`@mention` behaviour as channels. Threads are channel-only.
+New accounts start as **pending** and see a waiting screen (no workspace access). Workspace
+owners/admins see a **Sign-ups** entry in the sidebar with a badge; the dialog lists each applicant
+(name, handle, email, requested date, optional "Who invited you" note) with Accept / Decline.
 
-## Channels and invites
+- **Accept** adds them to the workspace as a member, joins them to `#general`, and the waiting tab
+  switches straight into the app.
+- **Decline** blocks login (`403 SIGNUP_DECLINED`) until an admin approves them later.
+
+Pending users are only listed while they belong to no workspace, so approved people drop off the
+list automatically. Decisions are pushed over the socket (`access.changed`).
+
+### Channels
 
 The **+** next to "Channels" opens *Create a channel*: name, topic, public/private, and a member
-picker to invite people right away (`POST /workspaces/:id/channels` with `memberIds`). Invitees get
-the channel in their sidebar instantly (realtime `channel.created`) — this is also how private
-channels are shared.
+picker (`POST /workspaces/:id/channels` with `memberIds`). Public channels are edited from the
+channel header (**Edit**): rename/topic (live for everyone via `channel.updated`), invite, and remove
+members. Private channel membership is managed by whoever invites people.
 
-Public channels can be edited from the **Edit** button in the channel header:
-- rename and topic (`PATCH /api/channels/:id`, live rename for everyone via `channel.updated`),
-- invite more workspace members (`POST /api/channels/:id/members`),
-- remove members (`DELETE /api/channels/:id/members/:userId`).
+### Direct messages
 
-Private channels are not editable here — their membership is managed by whoever invites people.
+**+** next to "Direct messages" opens a 1:1 chat. A conversation is one pair of workspace members,
+so opening it from either side reuses the same thread (creation is idempotent). Only the two
+participants can read it (others get `403`); it has its own unread badges, presence dots, sidebar
+previews, and the same realtime behaviour as channels. Threads are channel-only.
 
-## Message formatting
+### Messages
 
-Messages render a safe Markdown subset (plain React nodes — no `innerHTML`):
+- Realtime create/edit/delete, reactions, threads (`parentId` + reply panel).
+- Safe Markdown subset rendered as React nodes — no `innerHTML`:
 
-| Syntax | Result |
-| --- | --- |
-| `**bold**` / `_italic_` or `*italic*` | **bold**, _italic_ |
-| `~~strike~~` | ~~strike~~ |
-| `` `code` `` | inline code |
-| ```` ```lang ```` … ```` ``` ```` | fenced code block |
-| `- item` / `1. item` | bulleted / numbered list |
-| `> text` | blockquote |
-| `\| a \| b \|` + `\|---\|---\|` | table |
-| `https://…`, `@username` | clickable link, mention pill |
+  | Syntax | Result |
+  | --- | --- |
+  | `**bold**`, `_italic_` / `*italic*`, `~~strike~~` | bold, italic, strikethrough |
+  | `` `code` `` and fenced code blocks | inline / block code |
+  | `- item`, `1. item`, `> quote` | lists and blockquotes |
+  | `\| a \| b \|` + `\|---\|---\|` | table |
+  | `https://…`, `@username` | link, mention pill |
 
-The composer has a toolbar (and `Ctrl/Cmd+B`, `Ctrl/Cmd+I`, `Ctrl/Cmd+E`), `Enter` sends,
-`Shift+Enter` adds a line, and `@` opens the member picker.
+- Composer: toolbar, `Ctrl/Cmd+B/I/E`, `Enter` sends, `Shift+Enter` newline, `@` opens the member
+  picker.
 
-## Notifications
+### Notifications
 
-- **In-app**: channel unread badges, bold channel names, tab title `(n) Team Chat`, mention toast,
-  bell dropdown, "Mentions & activity" view, highlighted `@mention` pills.
-- **Desktop**: Preferences → Desktop notifications toggles a Web Push subscription. Pushes are sent
-  only for `@mentions` and only when the user has no live WebSocket (i.e. the tab is closed).
-  Web Push requires HTTPS or `localhost`.
+- **In-app**: unread badges, bold channel names, tab title `(n) Team Chat`, mention toast, bell
+  dropdown, "Mentions & activity" view.
+- **Desktop**: Preferences → Desktop notifications subscribes to Web Push. Pushes go out only for
+  `@mentions`, and only while the user has no live WebSocket (tab closed). Requires HTTPS or
+  `localhost`.
+- **Sound**: chime per incoming message (triple chime for mentions); toggle under Preferences →
+  Message sounds. Stored per browser (`tc.sound`); the first click/keypress arms audio.
 
-- **Sound**: a short chime plays for every incoming message (a brighter triple chime for
-  `@mentions`). Toggle it under Preferences → Message sounds; the choice is stored in the browser
-  (`tc.sound`). Browsers only allow audio after a user gesture, so the first click/keypress arms it.
+### Profiles and appearance
 
-## Profiles and appearance
+- Click any name or avatar to open a profile card (`GET /workspaces/:id/members/:userId`): role,
+  join date, account age, online status, **Message** button.
+- **Change password** (Preferences → Password): verifies the current password, stores an Argon2
+  hash, revokes all refresh tokens (other devices are signed out), and issues a fresh session.
+  Rate limited to 10 attempts/minute.
+- **Sidebar color**: 8 presets plus a custom picker with live preview and contrast-checked text.
+  Saved per browser (`tc.sidebarTheme`, `tc.sidebarCustom`) and drives the accent color.
 
-- Click any name or avatar — in a message, a mention pill, the members list, or a DM header — to
-  open that person's profile card (`GET /workspaces/:id/members/:userId`): role, join date, account
-  age, online status, and a **Message** button that opens the 1:1 DM.
-- **Change password**: Preferences → Password verifies the current password, stores an Argon2 hash
-  of the new one, revokes every refresh token (other devices are signed out) and issues a fresh
-  session for the current browser. Rate limited to 10 attempts/minute.
-- **Sidebar color**: Preferences → Sidebar color offers 8 presets plus a custom color picker with a
-  live sample and readable text contrast. The choice is saved per browser (`tc.sidebarTheme`,
-  `tc.sidebarCustom`) and also drives the accent color.
+### Attachments
 
-## Attachments
+Images and files via the paperclip, drag & drop, or paste. Streamed to `POST /api/attachments`
+(max `UPLOAD_MAX_MB` each, 10 per message), stored under `UPLOAD_DIR`, linked to the message by
+`attachmentIds` when sent. Images render as thumbnails with a lightbox; other files as download
+chips. Downloads (`GET /api/attachments/:id`) check that the viewer belongs to the message's
+channel/DM, send `X-Content-Type-Options: nosniff`, and force a download for anything that isn't an
+inline-safe image or PDF. Unclaimed uploads are deleted when removed before sending.
 
-The composer accepts images and files via the paperclip button, drag & drop, or paste. Files are
-streamed to `POST /api/attachments` (max 25 MB each, 10 per message — `UPLOAD_MAX_MB` in `.env`),
-stored under `UPLOAD_DIR` (`server/uploads`, gitignored), then linked to the message by
-`attachmentIds` when it is sent. Images render as thumbnails with a lightbox; other files render as
-download chips. Downloads go through `GET /api/attachments/:id`, which checks that the viewer is a
-member of the message's channel/DM, sends `X-Content-Type-Options: nosniff`, and forces a download
-for anything that is not an inline-safe image or PDF. Uploads that are removed before sending are
-deleted. Use object storage (e.g. S3) and a shared `UPLOAD_DIR` volume when running multiple API
-instances.
+Storage keys are generated server-side, never derived from client file names. For multiple API
+instances, use object storage (e.g. S3) or a shared `UPLOAD_DIR` volume.
 
-## Production notes
+## Deployment
 
-Set `NODE_ENV=production`, a strong `JWT_SECRET`, real `VAPID_*` keys, `APP_URL` (used in push
-deep links), and `DATABASE_URL`. Then:
+Set `NODE_ENV=production`, a strong `JWT_SECRET`, real `VAPID_*` keys, `APP_URL`, and
+`DATABASE_URL`. Then:
 
 ```bash
 npm ci && npm run db:push && npm run build && npm start
 ```
 
-Vite's dev proxy drops WebSocket upgrades, so in development the client connects straight to the
-API origin (`VITE_API_URL`, default `http://localhost:4000`). In production everything shares one origin.
+`npm start` serves the API and the built SPA (`web/dist`) from one process; unknown non-`/api` paths
+fall back to `index.html` for client-side routing.
