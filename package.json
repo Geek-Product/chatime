@@ -1,0 +1,22 @@
+{
+  "name": "team-chat",
+  "private": true,
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm --workspace server run dev",
+    "dev:web": "npm --workspace web run dev",
+    "db:push": "npm --workspace server run db:push",
+    "db:seed": "npm --workspace server run db:seed",
+    "gen:vapid": "npm --workspace server run gen:vapid",
+    "build": "npm --workspace web run build",
+    "start": "npm --workspace server run start",
+    "typecheck": "npm --workspace web run typecheck && npm --workspace server run typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

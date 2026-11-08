@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -R /mnt/8AD454A3D45492F5/WORK/PROJECT/JS/team-chat/server /mnt/8AD454A3D45492F5/WORK/PROJECT/JS/team-chat/web | head -100)",
+      "Bash(ls -la && find . -maxdepth 3 -type d -not -path '*/node_modules*' -not -path '*/.git*' | head -60)"
+    ]
+  }
+}
