@@ -80,7 +80,7 @@ export default async function workspaceRoutes(app: FastifyInstance) {
       })
       .from(workspaceMembers)
       .innerJoin(users, eq(users.id, workspaceMembers.userId))
-      .where(eq(workspaceMembers.workspaceId, workspaceId))
+      .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(users.isBot, false)))
       .orderBy(users.displayName);
     return { members: rows };
   });
@@ -98,6 +98,7 @@ export default async function workspaceRoutes(app: FastifyInstance) {
         createdAt: users.createdAt,
         role: workspaceMembers.role,
         joinedAt: workspaceMembers.joinedAt,
+        bot: users.isBot,
       })
       .from(workspaceMembers)
       .innerJoin(users, eq(users.id, workspaceMembers.userId))

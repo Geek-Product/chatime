@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Mail, MessageSquare, Pencil, Shield, UserRound, X } from 'lucide-react';
+import { Mail, MessageSquare, Pencil, Shield, UserRound, Webhook, X } from 'lucide-react';
 import { Avatar } from './Avatar';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
@@ -17,6 +17,7 @@ interface ProfileResponse {
     createdAt: string;
     joinedAt: string;
     role: Member['role'];
+    bot: boolean;
   };
 }
 
@@ -91,7 +92,7 @@ export function UserProfileCard() {
               <UserRound size={13} className="text-zinc-500" />
               <dt className="text-zinc-500">Role</dt>
               <dd className="ml-auto font-bold capitalize">
-                {isLoading ? '…' : (member?.role ?? 'member')}
+                {isLoading ? '…' : member?.bot ? 'Webhook' : (member?.role ?? 'member')}
               </dd>
             </div>
             <div className="flex items-center gap-2">
@@ -119,7 +120,13 @@ export function UserProfileCard() {
             </button>
           )}
 
-          {!isMe && (
+          {!isMe && member?.bot && (
+            <p className="mt-3 flex items-center justify-center gap-2 rounded-md border border-line bg-panel px-3 py-2 text-xs font-semibold text-zinc-600">
+              <Webhook size={13} /> Posted by an incoming webhook
+            </p>
+          )}
+
+          {!isMe && !member?.bot && (
             <button
               type="button"
               onClick={() => {

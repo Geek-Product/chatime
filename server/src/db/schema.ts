@@ -26,8 +26,10 @@ export const users = pgTable('users', {
   email: varchar('email', { length: 255 }).notNull(),
   username: varchar('username', { length: 32 }).notNull(),
   displayName: varchar('display_name', { length: 80 }).notNull(),
+  // Bots (webhook authors) can never hold a session and store the sentinel '!bot' instead of a hash.
   passwordHash: text('password_hash').notNull(),
   avatarColor: varchar('avatar_color', { length: 16 }).notNull().default('#5865F2'),
+  isBot: boolean('is_bot').notNull().default(false),
   createdAt: createdAt(),
 }, (t) => [
   uniqueIndex('users_email_unique').on(sql`lower(${t.email})`),
@@ -175,6 +177,40 @@ export const pushSubscriptions = pgTable('push_subscriptions', {
   createdAt: createdAt(),
 }, (t) => [index('push_subscriptions_user_idx').on(t.userId)]);
 
+/**
+ * Incoming webhook: external platforms POST to `/api/webhooks/:id/:token`. Only the token's sha256 is
+ * stored; messages are authored by a bot user owned by this row.
+ */
+export const webhooks = pgTable('webhooks', {
+  id: id(),
+  channelId: uuid('channel_id').notNull().references(() => channels.id, { onDelete: 'cascade' }),
+  workspaceId: uuid('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
+  botUserId: uuid('bot_user_id').notNull().references(() => users.id),
+  createdBy: uuid('created_by').notNull().references(() => users.id),
+  name: varchar('name', { length: 80 }).notNull(),
+  tokenHash: text('token_hash').notNull().unique(),
+  template: text('template'),
+  notify: boolean('notify').notNull().default(false),
+  disabledAt: timestamp('disabled_at', { withTimezone: true }),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  createdAt: createdAt(),
+}, (t) => [
+  index('webhooks_channel_idx').on(t.channelId),
+  index('webhooks_workspace_idx').on(t.workspaceId),
+]);
+
+/** Audit trail of deliveries, pruned to the newest 200 per webhook. */
+export const webhookDeliveries = pgTable('webhook_deliveries', {
+  id: id(),
+  webhookId: uuid('webhook_id').notNull().references(() => webhooks.id, { onDelete: 'cascade' }),
+  // No FK: messages outlive the webhook that created them.
+  messageId: uuid('message_id'),
+  status: varchar('status', { length: 16 }).notNull(),
+  error: text('error'),
+  payloadBytes: integer('payload_bytes'),
+  createdAt: createdAt(),
+}, (t) => [index('webhook_deliveries_webhook_idx').on(t.webhookId, t.createdAt)]);
+
 export const usersRelations = relations(users, ({ many }) => ({
   memberships: many(workspaceMembers),
 }));
@@ -201,3 +237,4 @@ export type Workspace = typeof workspaces.$inferSelect;
 export type Channel = typeof channels.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type Attachment = typeof attachments.$inferSelect;
+export type Webhook = typeof webhooks.$inferSelect;

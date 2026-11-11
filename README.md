@@ -9,7 +9,7 @@ with unread badges and browser (Web Push) notifications.
 | Layer | Technologies |
 | --- | --- |
 | **Backend** | Node.js, Fastify 5, TypeScript, Zod (validation), Drizzle ORM |
-| **Database** | PostgreSQL (schema managed by Drizzle Kit, no migration files — `db:push`) |
+| **Database** | PostgreSQL (schema in `server/src/db/schema.ts`, SQL in `server/scripts/schema.sql`) |
 | **Realtime** | `@fastify/websocket` hub (presence, fan-out, 30 s heartbeat) |
 | **Auth** | JWT access tokens (`jose`) + rotating refresh tokens in an HttpOnly cookie, Argon2 password hashes |
 | **Files** | `@fastify/multipart` uploads to disk, permission-checked downloads |
@@ -18,7 +18,7 @@ with unread badges and browser (Web Push) notifications.
 | **Client data** | TanStack Query, React Router 7, sonner (toasts), lucide-react (icons) |
 | **Tooling** | npm workspaces, `tsx` (dev runner), `concurrently` |
 
-Requires: **Node.js 20+**, **PostgreSQL 14+** (running separately — see [Database](#database)).
+Requires: **Node.js 24.22.2+** (LTS), **PostgreSQL 14+** (running separately — see [Database](#database)).
 
 ## Quick start
 
@@ -29,10 +29,11 @@ npm run gen:vapid        # writes VAPID keys into .env (needed for desktop notif
 npm run dev              # API on :4000 + Vite on :5173
 ```
 
-In a second terminal, once Postgres is up:
+In a second terminal, once Postgres is up (the exported `DATABASE_URL` is the one from `.env`):
 
 ```bash
-npm run db:push          # create/update tables
+set -a; . ./.env; set +a
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f server/scripts/schema.sql   # create tables (see Database)
 npm run db:seed          # demo users, workspace "Acme", channels
 ```
 
@@ -70,11 +71,12 @@ team-chat/
 │   │   │   ├── unread.ts     # unread counts and last-read tracking
 │   │   │   ├── attachments.ts
 │   │   │   ├── push.ts       # Web Push delivery
+│   │   │   ├── webhooks.ts   # bot users, token URLs, payload → Markdown rendering
 │   │   │   └── errors.ts     # HttpError
 │   │   ├── routes/           # HTTP endpoints + /ws, all mounted under /api
 │   │   │   ├── auth.ts          channels.ts   conversations.ts  messages.ts
 │   │   │   ├── notifications.ts push.ts       attachments.ts    workspaces.ts
-│   │   │   ├── access.ts        ws.ts
+│   │   │   ├── access.ts        ws.ts         webhooks.ts
 │   │   └── types.d.ts        # Fastify decorators
 │   └── uploads/              # attachment storage (gitignored; path = UPLOAD_DIR)
 │
@@ -109,7 +111,7 @@ Run from the repository root.
 | --- | --- |
 | `npm run dev` | API (`tsx watch`) + Vite, side by side |
 | `npm run dev:api` / `dev:web` | Run just one of them |
-| `npm run db:push` | Push `server/src/db/schema.ts` to the database |
+| `npm run db:push` | Generate/apply schema via Drizzle Kit (does not work with the pinned `drizzle-kit`) |
 | `npm run db:seed` | Create demo users, workspace "Acme", channels |
 | `npm run gen:vapid` | Generate Web Push keys into `.env` |
 | `npm run typecheck` | TypeScript check for web and server |
@@ -143,7 +145,11 @@ the API in development; in production everything shares one origin.
 Postgres is **not** started by `npm run dev` — it is an independent service. The app only needs
 `DATABASE_URL`; any Postgres (system package, managed cloud instance, container) works.
 
-- Schema changes: edit `server/src/db/schema.ts`, then `npm run db:push`.
+- Schema changes: edit `server/src/db/schema.ts`, regenerate `server/scripts/schema.sql` (see the header of that file) and apply it with `psql "$DATABASE_URL" -f server/scripts/schema.sql`.
+- `npm run db:push` is broken: `drizzle-kit` is pinned to `0.18`, which has no `push` command.
+- The server sets `search_path` to `chatime,public` and the SQL creates its objects in a `chatime`
+  schema, so the DB role only needs `CREATE` on the database (an owned database no longer grants
+  `CREATE` on `public` in Postgres 15+). Create the schema once: `CREATE SCHEMA chatime;`.
 - Drizzle Kit reads `DATABASE_URL` from the root `.env` (see `server/drizzle.config.ts`).
 - Demo data is idempotent — `db:seed` can be re-run safely.
 
@@ -187,9 +193,12 @@ Errors are `{ "error": { "code": "…", "message": "…" } }`.
 | **Notifications** | `GET /notifications/mentions`, `POST /notifications/read`, `DELETE /notifications/mentions/:messageId`, `GET /unread` |
 | **Push** | `GET /push/key`, `POST /push/subscribe`, `DELETE /push/subscribe` |
 | **Attachments** | `GET /attachments/limits`, `POST /attachments`, `GET /attachments/:id`, `DELETE /attachments/:id` |
+| **Webhooks** | `POST /webhooks/:id/:token`², `GET/POST /workspaces/:id/webhooks`, `PATCH /webhooks/:id`, `POST /webhooks/:id/rotate`, `DELETE /webhooks/:id` |
 | **Realtime** | `GET /ws?token=…` (WebSocket) |
 
 ¹ Uses the refresh-token cookie instead of the `Authorization` header.
+² Public, called by external platforms; authenticated by the secret in the URL. Managing webhooks
+requires an owner/admin role in the workspace.
 
 ### WebSocket
 
@@ -278,13 +287,33 @@ inline-safe image or PDF. Unclaimed uploads are deleted when removed before send
 Storage keys are generated server-side, never derived from client file names. For multiple API
 instances, use object storage (e.g. S3) or a shared `UPLOAD_DIR` volume.
 
+### Incoming webhooks
+
+Point any external tool at a channel: **Edit → Webhooks** (workspace owners/admins) creates a secret
+URL. `POST` JSON (or `text/plain`) to it and it appears in the channel as a message authored by the
+webhook's name (e.g. "Metabase"), in realtime and counted toward unread badges.
+
+- **Payloads**: any JSON body. With a **template**, `{{path.to.field}}` is substituted from the body
+  (array indexes like `{{rows.0.region}}` work). Without one, a `text`/`content` string is used
+  verbatim; anything else becomes a readable key/value summary. Sending `text/plain` posts the body as
+  is. Rendering is capped at the 8000-character message limit.
+- **Notifications**: "Notify channel members" sends every channel member an in-app announcement and a
+  desktop push (no mention badge is touched).
+- **Metabase example**: alarm → Webhook → that URL; template `` **{{alert_name}}** — {{value}} ``.
+- **Security**: only the token's SHA-256 is stored; the full URL is shown once (on create or rotate).
+  Unknown, rotated and disabled URLs all answer `404`. Rotating stops the old URL immediately;
+  "Enabled" pauses deliveries without losing the URL. Removing a webhook keeps its past messages.
+- `APP_URL` must be reachable by the external platform (the URL is built from it). Requests are body-
+  limited to 256 KiB and rate limited per webhook. Errors: `404` unknown/disabled, `415` unsupported
+  content type, `422` payload rendered nothing.
+
 ## Deployment
 
 Set `NODE_ENV=production`, a strong `JWT_SECRET`, real `VAPID_*` keys, `APP_URL`, and
 `DATABASE_URL`. Then:
 
 ```bash
-npm ci && npm run db:push && npm run build && npm start
+npm ci && psql "$DATABASE_URL" -f server/scripts/schema.sql && npm run build && npm start
 ```
 
 `npm start` serves the API and the built SPA (`web/dist`) from one process; unknown non-`/api` paths

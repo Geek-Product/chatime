@@ -23,6 +23,7 @@ import conversationRoutes from './routes/conversations';
 import messageRoutes from './routes/messages';
 import notificationRoutes from './routes/notifications';
 import pushRoutes from './routes/push';
+import webhookAdminRoutes, { webhookReceiverRoutes } from './routes/webhooks';
 import workspaceRoutes from './routes/workspaces';
 import wsRoutes from './routes/ws';
 
@@ -59,13 +60,17 @@ export async function buildApp() {
     }
     const status = (err as { statusCode?: number }).statusCode;
     if (status && status < 500) {
-      return reply.code(status).send({ error: { code: 'BAD_REQUEST', message: (err as Error).message } });
+      const code = status === 413 ? 'PAYLOAD_TOO_LARGE' : status === 415 ? 'UNSUPPORTED_MEDIA_TYPE' : 'BAD_REQUEST';
+      return reply.code(status).send({ error: { code, message: (err as Error).message } });
     }
     req.log.error(err);
     return reply.code(500).send({ error: { code: 'INTERNAL', message: 'Internal server error' } });
   });
 
   app.get('/api/health', async () => ({ ok: true }));
+
+  // External platforms authenticate with the secret in the URL, so this stays outside the scoped auth.
+  await app.register(webhookReceiverRoutes);
 
   await app.register(async (scope) => {
     await scope.register(authRoutes);
@@ -77,6 +82,7 @@ export async function buildApp() {
     await scope.register(notificationRoutes);
     await scope.register(pushRoutes);
     await scope.register(attachmentRoutes);
+    await scope.register(webhookAdminRoutes);
   }, { prefix: '/api' });
 
   await app.register(wsRoutes, { prefix: '/api' });

@@ -57,7 +57,7 @@ export default async function channelRoutes(app: FastifyInstance) {
       })
       .from(channelMembers)
       .innerJoin(users, eq(users.id, channelMembers.userId))
-      .where(eq(channelMembers.channelId, channelId))
+      .where(and(eq(channelMembers.channelId, channelId), eq(users.isBot, false)))
       .orderBy(users.displayName);
     return { members: rows };
   });
@@ -73,7 +73,12 @@ export default async function channelRoutes(app: FastifyInstance) {
     const inWorkspace = await db
       .select({ userId: workspaceMembers.userId })
       .from(workspaceMembers)
-      .where(and(eq(workspaceMembers.workspaceId, channel.workspaceId), inArray(workspaceMembers.userId, targets)));
+      .innerJoin(users, eq(users.id, workspaceMembers.userId))
+      .where(and(
+        eq(workspaceMembers.workspaceId, channel.workspaceId),
+        inArray(workspaceMembers.userId, targets),
+        eq(users.isBot, false),
+      ));
     const allowed = new Set(inWorkspace.map((r) => r.userId));
     if (targets.some((id) => !allowed.has(id))) throw badRequest('Only workspace members can be added to a channel');
 

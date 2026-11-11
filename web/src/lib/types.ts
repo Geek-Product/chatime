@@ -8,6 +8,8 @@ export interface User {
   avatarColor: string;
   /** Set by the API: accounts wait for an admin to accept their sign-up. */
   status?: AccessStatus;
+  /** Webhook/integration authors: rendered like people but cannot sign in. */
+  isBot?: boolean;
 }
 
 export interface Workspace {
@@ -109,7 +111,7 @@ export interface UnreadResponse {
 }
 
 export interface MentionNotification {
-  kind: 'mention';
+  kind: 'mention' | 'webhook';
   messageId: string;
   channelId: string | null;
   conversationId?: string | null;
@@ -120,6 +122,21 @@ export interface MentionNotification {
   at: string;
   unreadMentions: number;
 }
+
+export interface Webhook {
+  id: string;
+  channelId: string;
+  workspaceId: string;
+  name: string;
+  template: string | null;
+  notify: boolean;
+  disabled: boolean;
+  lastUsedAt: string | null;
+  createdAt: string;
+}
+
+/** Returned once, on create or rotate: the only time the secret URL is shown. */
+export type WebhookWithUrl = Webhook & { url: string };
 
 export interface SavedMention {
   messageId: string;

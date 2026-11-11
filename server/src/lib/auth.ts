@@ -6,6 +6,8 @@ import { env } from '../../env';
 import type { AuthUser } from '../types';
 import { unauthorized } from './errors';
 
+export const AVATAR_COLORS = ['#5865F2', '#EB459E', '#57F287', '#FEE75C', '#ED4245', '#3BA55D', '#FAA61A', '#9B59B6'];
+
 const secret = new TextEncoder().encode(env.JWT_SECRET);
 export const ACCESS_TOKEN_TTL_SECONDS = 10 * 60;
 

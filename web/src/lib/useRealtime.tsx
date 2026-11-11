@@ -193,6 +193,20 @@ export function useRealtime({ meId, activeChannelId, activeConversationId, onMen
           break;
         case 'notification': {
           const n = event.notification;
+          if (n.kind === 'webhook') {
+            // An announcement, not a mention: keep the mentions badge untouched.
+            playMessageSound();
+            toast(
+              <span>
+                <b>{n.authorName}</b> posted in <b>{n.channelName ? `#${n.channelName}` : 'a channel'}</b>
+              </span>,
+              {
+                description: <span className="cursor-pointer">{n.snippet}</span>,
+                action: { label: 'View', onClick: () => handlers.current.onOpenNotification(n) },
+              },
+            );
+            break;
+          }
           const body = (
             <span>
               <b>{n.authorName}</b> mentioned you in <b>{n.channelName ? `#${n.channelName}` : 'a direct message'}</b>

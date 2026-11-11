@@ -8,6 +8,7 @@ import { hub } from '../lib/hub';
 import { getWorkspaceIdsForUser } from '../lib/access';
 import {
   ACCESS_TOKEN_TTL_SECONDS,
+  AVATAR_COLORS,
   REFRESH_COOKIE,
   authenticate,
   hashPassword,
@@ -32,8 +33,6 @@ const registerBody = credentials.extend({
   /** Optional note for the admin reviewing the sign-up. */
   message: z.string().trim().max(500).optional(),
 });
-
-const AVATAR_COLORS = ['#5865F2', '#EB459E', '#57F287', '#FEE75C', '#ED4245', '#3BA55D', '#FAA61A', '#9B59B6'];
 
 function publicUser(u: typeof users.$inferSelect, status: 'approved' | 'pending' | 'declined' = 'approved') {
   return { id: u.id, email: u.email, username: u.username, displayName: u.displayName, avatarColor: u.avatarColor, status };
@@ -81,7 +80,7 @@ export default async function authRoutes(app: FastifyInstance) {
       .select()
       .from(users)
       .where(or(sql`lower(${users.email}) = lower(${body.email})`, sql`lower(${users.username}) = lower(${body.email})`));
-    if (!user || !(await verifyPassword(user.passwordHash, body.password))) {
+    if (!user || user.isBot || !(await verifyPassword(user.passwordHash, body.password))) {
       throw unauthorized('Invalid email or password');
     }
     const status = await accessStatusOf(user.id);

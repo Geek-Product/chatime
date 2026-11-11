@@ -1,18 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
-import { env } from '../../env';
 import { db } from '../db/index';
-import { attachments, channelMembers, messageMentions, messages, reactions, users, workspaceMembers } from '../db/schema';
+import { attachments, messages, reactions, users, workspaceMembers } from '../db/schema';
 import { authenticate, requireUser } from '../lib/auth';
 import { historyAround, historyBefore, type ChatLocation } from '../lib/chat';
 import { MAX_FILES_PER_MESSAGE } from '../lib/attachments';
 import { badRequest, forbidden, notFound } from '../lib/errors';
-import { hub } from '../lib/hub';
-import { mentionedUsernames, plainSnippet, serializeMessages } from '../lib/messages';
-import { sendPushToUsers } from '../lib/push';
-import { broadcastToTarget, resolveTarget, targetWorkspaceId } from '../lib/targets';
-import { unreadTotal } from '../lib/unread';
+import { postMessage, serializeMessages } from '../lib/messages';
+import { broadcastToTarget, resolveTarget } from '../lib/targets';
 
 const messageParams = z.object({ messageId: z.string().uuid() });
 
@@ -39,7 +35,6 @@ export default async function messageRoutes(app: FastifyInstance) {
     const target = body.conversationId
       ? await resolveTarget({ channelId: null, directConversationId: body.conversationId }, me.id)
       : await resolveTarget({ channelId: body.channelId!, directConversationId: null }, me.id);
-    const workspaceId = targetWorkspaceId(target);
 
     if (body.parentId) {
       const [p] = await db.select({ channelId: messages.channelId }).from(messages).where(eq(messages.id, body.parentId));
@@ -57,86 +52,16 @@ export default async function messageRoutes(app: FastifyInstance) {
       }
     }
 
-    const [inserted] = await db.insert(messages).values({
-      channelId: target.kind === 'channel' ? target.channel.id : null,
-      directConversationId: target.kind === 'dm' ? target.conversationId : null,
-      userId: me.id,
-      parentId: body.parentId ?? null,
+    const { inserted, mentionIds } = await postMessage({
+      target,
+      author: me,
       content: body.content,
-    }).returning();
+      parentId: body.parentId,
+    });
 
     if (body.attachmentIds.length) {
       await db.update(attachments).set({ messageId: inserted.id }).where(inArray(attachments.id, body.attachmentIds));
     }
-
-    // Resolve @mentions against people who can see the message
-    const visibleUsers = target.kind === 'channel'
-      ? await db
-          .select({ id: users.id, username: users.username })
-          .from(users)
-          .innerJoin(workspaceMembers, eq(workspaceMembers.userId, users.id))
-          .where(eq(workspaceMembers.workspaceId, workspaceId))
-      : await db
-          .select({ id: users.id, username: users.username })
-          .from(users)
-          .where(inArray(users.id, target.recipients));
-
-    const mentioned = mentionedUsernames(body.content, visibleUsers.map((u) => u.username))
-      .map((name) => visibleUsers.find((u) => u.username.toLowerCase() === name)!)
-      .filter((u) => u.id !== me.id);
-
-    if (mentioned.length) {
-      await db.insert(messageMentions).values(mentioned.map((u) => ({ messageId: inserted.id, userId: u.id }))).onConflictDoNothing();
-    }
-
-    if (target.kind === 'channel') {
-      // Author implicitly reads their own message
-      const now = new Date();
-      await db
-        .insert(channelMembers)
-        .values({ channelId: target.channel.id, userId: me.id, lastReadAt: now })
-        .onConflictDoUpdate({ target: [channelMembers.channelId, channelMembers.userId], set: { lastReadAt: now } });
-    }
-
-    // Each recipient needs their own view (reply counts / "mentions me"), so serialize per connection.
-    const mentionIds = mentioned.map((u) => u.id);
-    broadcastToTarget(target, async (userId) => ({
-      type: 'message.created',
-      message: { ...(await serializeMessages([inserted.id], userId))[0], mentionUserIds: mentionIds },
-    }));
-
-    const link = target.kind === 'channel'
-      ? `${env.APP_URL}/w/${workspaceId}/c/${target.channel.id}?m=${inserted.id}`
-      : `${env.APP_URL}/w/${workspaceId}/d/${target.conversationId}?m=${inserted.id}`;
-    // DMs always notify the other person; channels only notify the people mentioned.
-    const recipients = target.kind === 'channel'
-      ? mentioned
-      : visibleUsers.filter((u) => u.id !== me.id);
-    const recipientChannel = target.kind === 'channel' ? target.channel.id : null;
-    for (const u of recipients) {
-      const counts = await unreadTotal(u.id, await workspaceIdsOf(u.id));
-      hub.sendToUser(u.id, {
-        type: 'notification',
-        notification: {
-          kind: 'mention',
-          messageId: inserted.id,
-          channelId: recipientChannel,
-          conversationId: target.kind === 'dm' ? target.conversationId : null,
-          workspaceId,
-          channelName: target.kind === 'channel' ? target.channel.name : null,
-          authorName: me.displayName,
-          snippet: plainSnippet(body.content),
-          at: inserted.createdAt.toISOString(),
-          unreadMentions: counts.mentions,
-        },
-      });
-    }
-    await sendPushToUsers(recipients.map((u) => u.id), {
-      title: target.kind === 'channel' ? `${me.displayName} mentioned you in #${target.channel.name}` : `New message from ${me.displayName}`,
-      body: plainSnippet(body.content),
-      url: link,
-      tag: target.kind === 'channel' ? `channel-${target.channel.id}` : `dm-${target.conversationId}`,
-    });
 
     const [message] = await serializeMessages([inserted.id], me.id);
     return reply.code(201).send({ message: { ...message, mentionUserIds: mentionIds } });
@@ -266,12 +191,4 @@ export default async function messageRoutes(app: FastifyInstance) {
     broadcastToTarget(target, { type: 'reaction.updated', messageId, reactions: updated.reactions });
     return { reactions: updated.reactions };
   });
-}
-
-async function workspaceIdsOf(userId: string) {
-  const rows = await db
-    .select({ workspaceId: workspaceMembers.workspaceId })
-    .from(workspaceMembers)
-    .where(eq(workspaceMembers.userId, userId));
-  return rows.map((r) => r.workspaceId);
 }

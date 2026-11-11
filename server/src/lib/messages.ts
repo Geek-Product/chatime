@@ -1,8 +1,13 @@
 import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
+import { env } from '../../env';
 import { db } from '../db/index';
-import { messageMentions, messages, reactions, users } from '../db/schema';
+import { channelMembers, messageMentions, messages, reactions, users, workspaceMembers } from '../db/schema';
 import { attachmentsForMessages, toAttachmentDto } from './attachments';
+import { hub } from './hub';
+import { sendPushToUsers } from './push';
+import { broadcastToTarget, targetWorkspaceId, type MessageTarget } from './targets';
+import { unreadTotal } from './unread';
 
 export const authorColumns = {
   id: users.id,
@@ -100,6 +105,117 @@ export async function serializeMessages(ids: string[], viewerId: string) {
         : null,
     }];
   });
+}
+
+/**
+ * Everything that follows a message insert, shared by the chat route and incoming webhooks:
+ * @mentions, the author's read mark, the `message.created` broadcast, mention notifications and push.
+ * With `notify` and `silenced` unset the chat behaviour applies (channel: mentioned users only,
+ * DM: the other participant).
+ */
+export async function postMessage(input: {
+  target: MessageTarget;
+  author: { id: string; displayName: string };
+  content: string;
+  parentId?: string | null;
+  /** Keep mentions and the `message.created` broadcast, but skip notifications and push. */
+  notify?: boolean;
+  /** Users who must never be notified, whatever the mentions say (e.g. the webhook's bot). */
+  silenced?: string[];
+}) {
+  const { target, author, content } = input;
+  if (target.kind === 'dm' && input.parentId) throw new Error('Direct messages do not support threads');
+  const workspaceId = targetWorkspaceId(target);
+
+  const [inserted] = await db.insert(messages).values({
+    channelId: target.kind === 'channel' ? target.channel.id : null,
+    directConversationId: target.kind === 'dm' ? target.conversationId : null,
+    userId: author.id,
+    parentId: input.parentId ?? null,
+    content,
+  }).returning();
+
+  // Resolve @mentions against people who can see the message
+  const visibleUsers = target.kind === 'channel'
+    ? await db
+        .select({ id: users.id, username: users.username })
+        .from(users)
+        .innerJoin(workspaceMembers, eq(workspaceMembers.userId, users.id))
+        .where(eq(workspaceMembers.workspaceId, workspaceId))
+    : await db
+        .select({ id: users.id, username: users.username })
+        .from(users)
+        .where(inArray(users.id, target.recipients));
+
+  const silenced = new Set([author.id, ...(input.silenced ?? [])]);
+  const mentioned = mentionedUsernames(content, visibleUsers.map((u) => u.username))
+    .map((name) => visibleUsers.find((u) => u.username.toLowerCase() === name)!)
+    .filter((u) => !silenced.has(u.id));
+
+  if (mentioned.length) {
+    await db.insert(messageMentions).values(mentioned.map((u) => ({ messageId: inserted.id, userId: u.id }))).onConflictDoNothing();
+  }
+
+  if (target.kind === 'channel') {
+    // Author implicitly reads their own message
+    const now = new Date();
+    await db
+      .insert(channelMembers)
+      .values({ channelId: target.channel.id, userId: author.id, lastReadAt: now })
+      .onConflictDoUpdate({ target: [channelMembers.channelId, channelMembers.userId], set: { lastReadAt: now } });
+  }
+
+  // Each recipient needs their own view (reply counts / "mentions me"), so serialize per connection.
+  const mentionIds = mentioned.map((u) => u.id);
+  broadcastToTarget(target, async (userId) => ({
+    type: 'message.created',
+    message: { ...(await serializeMessages([inserted.id], userId))[0], mentionUserIds: mentionIds },
+  }));
+
+  if (input.notify === false) return { inserted, mentionIds };
+
+  const link = target.kind === 'channel'
+    ? `${env.APP_URL}/w/${workspaceId}/c/${target.channel.id}?m=${inserted.id}`
+    : `${env.APP_URL}/w/${workspaceId}/d/${target.conversationId}?m=${inserted.id}`;
+  // DMs always notify the other person; channels only notify the people mentioned.
+  const recipients = target.kind === 'channel'
+    ? mentioned
+    : visibleUsers.filter((u) => !silenced.has(u.id));
+  const recipientChannel = target.kind === 'channel' ? target.channel.id : null;
+  for (const u of recipients) {
+    const counts = await unreadTotal(u.id, await workspaceIdsOf(u.id));
+    hub.sendToUser(u.id, {
+      type: 'notification',
+      notification: {
+        kind: 'mention',
+        messageId: inserted.id,
+        channelId: recipientChannel,
+        conversationId: target.kind === 'dm' ? target.conversationId : null,
+        workspaceId,
+        channelName: target.kind === 'channel' ? target.channel.name : null,
+        authorName: author.displayName,
+        snippet: plainSnippet(content),
+        at: inserted.createdAt.toISOString(),
+        unreadMentions: counts.mentions,
+      },
+    });
+  }
+  await sendPushToUsers(recipients.map((u) => u.id), {
+    title: target.kind === 'channel' ? `${author.displayName} mentioned you in #${target.channel.name}` : `New message from ${author.displayName}`,
+    body: plainSnippet(content),
+    url: link,
+    tag: target.kind === 'channel' ? `channel-${target.channel.id}` : `dm-${target.conversationId}`,
+  });
+
+  return { inserted, mentionIds };
+}
+
+export async function workspaceIdsOf(userId: string) {
+  const rows = await db
+    .select({ workspaceId: workspaceMembers.workspaceId })
+    .from(workspaceMembers)
+    .where(eq(workspaceMembers.userId, userId));
+  return rows.map((r) => r.workspaceId);
 }
 
 /**

@@ -4,6 +4,7 @@ import { Hash, Lock, UserMinus, UserPlus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Avatar } from './Avatar';
 import { MemberPicker } from './MemberPicker';
+import { WebhooksSection } from './WebhooksSection';
 import { api } from '../lib/api';
 import type { Channel, ChannelPerson, Member } from '../lib/types';
 
@@ -14,12 +15,15 @@ export function EditChannelModal({
   channel,
   members,
   meId,
+  isAdmin = false,
   onClose,
 }: {
   channel: Channel;
   /** Workspace members, offered for invitation. */
   members: Member[];
   meId: string;
+  /** Owners/admins also manage the channel's incoming webhooks. */
+  isAdmin?: boolean;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -215,6 +219,8 @@ export function EditChannelModal({
             {channelMembers.length === 0 && <li className="px-3 py-2 text-xs text-zinc-500">Loading members…</li>}
           </ul>
         </div>
+
+        {isAdmin && <WebhooksSection channelId={channel.id} workspaceId={channel.workspaceId} />}
 
         {error && <p className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</p>}
 

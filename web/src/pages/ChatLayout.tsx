@@ -721,6 +721,7 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
           channel={channel}
           members={members}
           meId={me.id}
+          isAdmin={isAdmin}
           onClose={() => setEditChannelOpen(false)}
         />
       )}

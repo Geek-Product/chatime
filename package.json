@@ -5,6 +5,9 @@
     "server",
     "web"
   ],
+  "engines": {
+    "node": ">=24.22.2"
+  },
   "scripts": {
     "dev": "concurrently -n api,web -c cyan,magenta \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "npm --workspace server run dev",
@@ -18,5 +21,10 @@
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
+  },
+  "allowScripts": {
+    "argon2@0.44.0": true,
+    "esbuild@0.15.18": true,
+    "es5-ext@0.10.64": true
   }
 }
