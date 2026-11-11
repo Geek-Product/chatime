@@ -2,9 +2,9 @@ import type { WebSocket } from 'ws';
 
 export type ServerEvent =
   | { type: 'hello'; userId: string; workspaceIds: string[]; online: string[]; unread: { unread: number; mentions: number } }
-  | { type: 'message.created'; message: unknown }
+  | { type: 'message.created'; message: unknown; parentReplyCount?: number }
   | { type: 'message.updated'; message: unknown }
-  | { type: 'message.deleted'; channelId: string | null; conversationId?: string | null; id: string; parentId: string | null }
+  | { type: 'message.deleted'; channelId: string | null; conversationId?: string | null; id: string; parentId: string | null; parentReplyCount?: number }
   | { type: 'reaction.updated'; messageId: string; reactions: unknown[] }
   | { type: 'channel.created'; channel: unknown }
   | { type: 'channel.updated'; channel: unknown }

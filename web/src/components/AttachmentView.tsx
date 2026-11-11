@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { Download, FileSpreadsheet, FileText, File as FileIcon } from 'lucide-react';
+import { Download, FileCode2, FileSpreadsheet, FileText, File as FileIcon, Maximize2 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAccessToken, downloadAttachment } from '../lib/api';
+import { languageForFile, languageLabel } from '../lib/codeHighlight';
 import { toast } from 'sonner';
 import type { Attachment } from '../lib/types';
+import { CodePreview } from './CodePreview';
 
 export function formatBytes(n: number) {
   if (n < 1024) return `${n} B`;
@@ -39,6 +41,9 @@ function fileIcon(mime: string) {
   if (mime.includes('csv') || mime.includes('spreadsheet') || mime.includes('excel')) return FileSpreadsheet;
   return FileIcon;
 }
+
+/** Code files keep their extension (uploads are stored as `.bin`), so the client decides by filename. */
+const isCodeFile = (a: Attachment) => !a.isImage && languageForFile(a.filename) !== null;
 
 function ImageAttachment({ attachment }: { attachment: Attachment }) {
   const { data: src, isError } = useAttachmentBlob(attachment.url);
@@ -109,26 +114,39 @@ function ImageAttachment({ attachment }: { attachment: Attachment }) {
 }
 
 function FileAttachment({ attachment }: { attachment: Attachment }) {
-  const Icon = fileIcon(attachment.mimeType);
+  const code = isCodeFile(attachment);
+  const lang = code ? languageForFile(attachment.filename) : null;
+  const [previewing, setPreviewing] = useState(false);
+  const Icon = code ? FileCode2 : fileIcon(attachment.mimeType);
+
   return (
-    <button
-      type="button"
-      onClick={() =>
-        void downloadAttachment(attachment.url, attachment.filename).catch((e: Error) =>
-          toast.error(e.message))
-      }
-      className="flex max-w-sm items-center gap-2.5 rounded-lg border border-line bg-white px-3 py-2 text-left hover:border-zinc-400 hover:bg-hover"
-      title={`Download ${attachment.filename}`}
-    >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-purple-50 text-accent">
-        <Icon size={18} />
-      </span>
-      <span className="min-w-0">
-        <span className="block truncate text-sm font-bold text-ink">{attachment.filename}</span>
-        <span className="block text-xs text-zinc-500">{formatBytes(attachment.size)}</span>
-      </span>
-      <Download size={15} className="ml-2 shrink-0 text-zinc-400" />
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={() =>
+          code
+            ? setPreviewing(true)
+            : void downloadAttachment(attachment.url, attachment.filename).catch((e: Error) => toast.error(e.message))
+        }
+        className="flex max-w-sm items-center gap-2.5 rounded-lg border border-line bg-white px-3 py-2 text-left hover:border-zinc-400 hover:bg-hover"
+        title={code ? `Preview ${attachment.filename}` : `Download ${attachment.filename}`}
+      >
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-purple-50 text-accent">
+          <Icon size={18} />
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-bold text-ink">{attachment.filename}</span>
+          <span className="block text-xs text-zinc-500">
+            {formatBytes(attachment.size)}
+            {lang && <> · {languageLabel(lang)}</>}
+          </span>
+        </span>
+        {code
+          ? <Maximize2 size={14} className="ml-2 shrink-0 text-zinc-400" />
+          : <Download size={15} className="ml-2 shrink-0 text-zinc-400" />}
+      </button>
+      {previewing && <CodePreview attachment={attachment} onClose={() => setPreviewing(false)} />}
+    </>
   );
 }
 

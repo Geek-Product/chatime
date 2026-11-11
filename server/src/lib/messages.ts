@@ -167,9 +167,12 @@ export async function postMessage(input: {
 
   // Each recipient needs their own view (reply counts / "mentions me"), so serialize per connection.
   const mentionIds = mentioned.map((u) => u.id);
+  // A reply's parent counter is sent as a value, not a delta, so clients cannot double-count it.
+  const parentReplyCount = inserted.parentId ? await replyCountOf(inserted.parentId) : undefined;
   broadcastToTarget(target, async (userId) => ({
     type: 'message.created',
     message: { ...(await serializeMessages([inserted.id], userId))[0], mentionUserIds: mentionIds },
+    parentReplyCount,
   }));
 
   if (input.notify === false) return { inserted, mentionIds };
@@ -208,6 +211,15 @@ export async function postMessage(input: {
   });
 
   return { inserted, mentionIds };
+}
+
+/** Live count of non-deleted replies under a parent, as shown in the parent's reply counter. */
+export async function replyCountOf(parentId: string) {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(messages)
+    .where(and(eq(messages.parentId, parentId), isNull(messages.deletedAt)));
+  return row?.count ?? 0;
 }
 
 export async function workspaceIdsOf(userId: string) {

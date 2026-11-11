@@ -252,8 +252,14 @@ previews, and the same realtime behaviour as channels. Threads are channel-only.
   | `\| a \| b \|` + `\|---\|---\|` | table |
   | `https://…`, `@username` | link, mention pill |
 
+- Fenced blocks with a language (` ```js `) are syntax-highlighted and labelled; others render as
+  plain code.
 - Composer: toolbar, `Ctrl/Cmd+B/I/E`, `Enter` sends, `Shift+Enter` newline, `@` opens the member
   picker.
+- **Lists**: typing `- `, `* ` or `1. ` at a line start opens a list. `Enter` continues it
+  (`- `, or the next number), `Enter` on an empty item ends it. Inside a list, send with
+  `Ctrl/Cmd+Enter`.
+- **Edit last**: pressing `↑` in an empty composer loads your most recent message for editing.
 
 ### Notifications
 
@@ -283,6 +289,13 @@ Images and files via the paperclip, drag & drop, or paste. Streamed to `POST /ap
 chips. Downloads (`GET /api/attachments/:id`) check that the viewer belongs to the message's
 channel/DM, send `X-Content-Type-Options: nosniff`, and force a download for anything that isn't an
 inline-safe image or PDF. Unclaimed uploads are deleted when removed before sending.
+
+**Code preview**: files with a programming extension (`.js`, `.ts`, `.tsx`, `.html`, `.css`, `.py`,
+`.json`, `.go`, `.sql`, `.yaml`, `.md`, and more) open in a modal with Prism syntax highlighting,
+line numbers, word-wrap toggle, copy, and download, instead of downloading straight away. Files are
+read as text client-side (capped at 1 MB) through the same authenticated `GET /api/attachments/:id`.
+The extension comes from the stored filename (uploads are kept as `.bin`), and Prism is a lazily
+loaded chunk.
 
 Storage keys are generated server-side, never derived from client file names. For multiple API
 instances, use object storage (e.g. S3) or a shared `UPLOAD_DIR` volume.

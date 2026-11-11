@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../db/index';
 import { attachments, messages, reactions, users, workspaceMembers } from '../db/schema';
@@ -7,7 +7,7 @@ import { authenticate, requireUser } from '../lib/auth';
 import { historyAround, historyBefore, type ChatLocation } from '../lib/chat';
 import { MAX_FILES_PER_MESSAGE } from '../lib/attachments';
 import { badRequest, forbidden, notFound } from '../lib/errors';
-import { postMessage, serializeMessages } from '../lib/messages';
+import { postMessage, replyCountOf, serializeMessages } from '../lib/messages';
 import { broadcastToTarget, resolveTarget } from '../lib/targets';
 
 const messageParams = z.object({ messageId: z.string().uuid() });
@@ -64,7 +64,8 @@ export default async function messageRoutes(app: FastifyInstance) {
     }
 
     const [message] = await serializeMessages([inserted.id], me.id);
-    return reply.code(201).send({ message: { ...message, mentionUserIds: mentionIds } });
+    const parentReplyCount = body.parentId ? await replyCountOf(body.parentId) : undefined;
+    return reply.code(201).send({ message: { ...message, mentionUserIds: mentionIds }, parentReplyCount });
   });
 
   app.get('/channels/:channelId/history', async (req) => {
@@ -117,7 +118,7 @@ export default async function messageRoutes(app: FastifyInstance) {
     const rows = await db
       .select({ id: messages.id })
       .from(messages)
-      .where(eq(messages.parentId, messageId))
+      .where(and(eq(messages.parentId, messageId), isNull(messages.deletedAt)))
       .orderBy(asc(messages.createdAt));
     const replies = await serializeMessages(rows.map((r) => r.id), me.id);
     return { replies };
@@ -156,14 +157,16 @@ export default async function messageRoutes(app: FastifyInstance) {
     if (!isAuthor && !canModerate) throw forbidden('You can only delete your own messages');
 
     await db.update(messages).set({ deletedAt: new Date(), content: '' }).where(eq(messages.id, messageId));
+    const parentReplyCount = msg.parentId ? await replyCountOf(msg.parentId) : undefined;
     broadcastToTarget(target, {
       type: 'message.deleted',
       id: messageId,
       channelId: msg.channelId,
       conversationId: msg.directConversationId,
       parentId: msg.parentId,
+      parentReplyCount,
     });
-    return { ok: true };
+    return { ok: true, parentReplyCount };
   });
 
   app.post('/messages/:messageId/reactions', async (req) => {

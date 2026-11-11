@@ -98,6 +98,7 @@ export function ThreadPanel({
         placeholder="Reply…"
         members={members}
         autoFocus
+        compact
         onSend={(content, attachmentIds) => onSend(content, attachmentIds, parentMessage.id)}
       />
     </aside>

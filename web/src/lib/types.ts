@@ -151,9 +151,9 @@ export interface SavedMention {
 
 export type ServerEvent =
   | { type: 'hello'; userId: string; workspaceIds: string[]; unread: { unread: number; mentions: number }; online: string[] }
-  | { type: 'message.created'; message: Message }
+  | { type: 'message.created'; message: Message; parentReplyCount?: number }
   | { type: 'message.updated'; message: Message }
-  | { type: 'message.deleted'; id: string; channelId: string | null; conversationId?: string | null; parentId: string | null }
+  | { type: 'message.deleted'; id: string; channelId: string | null; conversationId?: string | null; parentId: string | null; parentReplyCount?: number }
   | { type: 'reaction.updated'; messageId: string; reactions: Reaction[] }
   | { type: 'channel.created'; channel: Channel }
   | { type: 'channel.updated'; channel: Channel }

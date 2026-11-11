@@ -1,4 +1,5 @@
 import { Fragment, type ReactNode } from 'react';
+import { languageFromFence, languageLabel, useHighlighter } from '../lib/codeHighlight';
 
 const URL_RE = /(https?:\/\/[^\s<>()]+)/g;
 const MENTION_RE = /@([a-zA-Z0-9_.-]{2,32})/g;
@@ -44,16 +45,22 @@ export function MessageText({
   className?: string;
 }) {
   const ctx: Ctx = { me, knownUsernames, onMentionClick };
+  const highlight = useHighlighter();
   let key = 0;
   const k = () => key++;
   return (
     <div className={`msg-content ${className ?? ''}`} title={content.length > 500 ? undefined : content}>
-      {renderBlocks(content, ctx, k)}
+      {renderBlocks(content, ctx, k, highlight)}
     </div>
   );
 }
 
-function renderBlocks(content: string, ctx: Ctx, k: () => number): ReactNode[] {
+function renderBlocks(
+  content: string,
+  ctx: Ctx,
+  k: () => number,
+  highlight: ((code: string, lang: string | null) => string | null) | null,
+): ReactNode[] {
   const lines = content.replace(/\r\n?/g, '\n').split('\n');
   const out: ReactNode[] = [];
   let i = 0;
@@ -62,14 +69,22 @@ function renderBlocks(content: string, ctx: Ctx, k: () => number): ReactNode[] {
     const line = lines[i];
 
     if (FENCE_RE.test(line)) {
+      const lang = languageFromFence(line.trim().replace(/^`{3,}/, ''));
       const body: string[] = [];
       i++;
       while (i < lines.length && !FENCE_RE.test(lines[i])) body.push(lines[i++]);
       i++; // closing fence (or end of content)
+      const source = body.join('\n');
+      const html = highlight ? highlight(source, lang) : null;
       out.push(
-        <pre key={k()} className="code-block">
-          <code>{body.join('\n')}</code>
-        </pre>,
+        <div key={k()} className="code-wrap">
+          {lang && <span className="code-lang">{languageLabel(lang)}</span>}
+          <pre className="code-block">
+            {html === null
+              ? <code>{source}</code>
+              : <code className={`language-${lang}`} dangerouslySetInnerHTML={{ __html: html }} />}
+          </pre>
+        </div>,
       );
       continue;
     }

@@ -5,6 +5,7 @@ import { useDismiss } from '../lib/useDismiss';
 import { MessageSquare, MoreHorizontal, Pencil, SmilePlus, Trash2, X } from 'lucide-react';
 import { Avatar } from './Avatar';
 import { Attachments } from './AttachmentView';
+import { ConfirmDialog } from './ConfirmDialog';
 import { MessageText, plainText } from './MessageText';
 import type { Message } from '../lib/types';
 
@@ -91,6 +92,7 @@ export function MessageItem({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const emojiRef = useRef<HTMLDivElement>(null);
   useDismiss(emojiRef, showEmoji, () => setShowEmoji(false));
   const mine = message.author.id === meId;
@@ -270,7 +272,7 @@ export function MessageItem({
             <button
               type="button"
               className="rounded px-1.5 py-1 text-zinc-600 hover:bg-hover"
-              onClick={() => void onDelete(message.id)}
+              onClick={() => setConfirmingDelete(true)}
               aria-label="Delete message"
             >
               <Trash2 size={15} />
@@ -299,6 +301,18 @@ export function MessageItem({
             <X size={14} />
           </button>
         </div>
+      )}
+
+      {confirmingDelete && (
+        <ConfirmDialog
+          title={message.parentId ? 'Delete this reply?' : 'Delete this message?'}
+          message="This cannot be undone."
+          onCancel={() => setConfirmingDelete(false)}
+          onConfirm={() => {
+            setConfirmingDelete(false);
+            void onDelete(message.id);
+          }}
+        />
       )}
     </div>
   );

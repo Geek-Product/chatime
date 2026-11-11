@@ -42,16 +42,54 @@ interface Staged {
   attachment: Attachment | null;
 }
 
+/** A list item the caret is sitting on: `next` is what Enter inserts to continue the list. */
+interface ListItem {
+  /** Offset of the first character after the marker (`- `, `1. `). */
+  contentStart: number;
+  end: number;
+  body: string;
+  marker: string;
+  next: string;
+}
+
+const LIST_MARKER = /^(\s{0,3})(?:([-*+])|([0-9]{1,9})([.)]))[ \t]+/;
+/** A marker the user just typed, before the trailing space (e.g. `1.`). */
+const BARE_MARKER = /^(\s{0,3})([-*+]|[0-9]{1,9}[.)])$/;
+
+/** The list item containing `caret`, if the caret is after its marker. */
+function listItemAt(value: string, caret: number): ListItem | null {
+  const start = value.lastIndexOf('\n', caret - 1) + 1;
+  const nl = value.indexOf('\n', start);
+  const end = nl === -1 ? value.length : nl;
+  const line = value.slice(start, end);
+  const m = LIST_MARKER.exec(line);
+  if (!m) return null;
+  const contentStart = start + m[0].length;
+  if (caret < contentStart || caret > end) return null;
+  const [marker, indent, bullet, number, delimiter] = m;
+  const next = bullet ? `${indent}${bullet} ` : `${indent}${Number(number) + 1}${delimiter} `;
+  return { contentStart, end, body: line.slice(marker.length), marker, next };
+}
+
 export function Composer({
   placeholder,
   members,
   autoFocus,
+  lastOwnMessage,
   onSend,
+  onEdit,
+  compact,
 }: {
   placeholder: string;
   members: Member[];
   autoFocus?: boolean;
+  /** The user's most recent message here, recalled with ↑ in an empty composer to be edited. */
+  lastOwnMessage?: { id: string; content: string } | null;
   onSend: (content: string, attachmentIds: string[]) => Promise<void>;
+  /** Saves an edited message; Enter then updates it instead of posting a new one. */
+  onEdit?: (id: string, content: string) => Promise<void>;
+  /** Narrower layouts (the thread panel) drop the keyboard-shortcut hint above the textarea. */
+  compact?: boolean;
 }) {
   const qc = useQueryClient();
   const [value, setValue] = useState('');
@@ -60,13 +98,15 @@ export function Composer({
   const [dragging, setDragging] = useState(false);
   const [limits, setLimits] = useState<{ mb: number; max: number } | null>(null);
   const [mention, setMention] = useState<{ query: string; start: number; index: number } | null>(null);
+  /** Set while the composer holds a recalled message; Enter saves it instead of sending. */
+  const [editingId, setEditingId] = useState<string | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
 
   const uploading = staged.some((s) => !s.attachment && !s.failed);
   const ready = staged.filter((s) => s.attachment);
-  const canSend = (value.trim().length > 0 || ready.length > 0) && !sending && !uploading;
+  const canSubmit = editingId ? value.trim().length > 0 && !sending : (value.trim().length > 0 || ready.length > 0) && !sending && !uploading;
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -120,6 +160,44 @@ export function Composer({
       el?.focus();
       el?.setSelectionRange(pos, pos);
     });
+  }
+
+  /**
+   * Replaces `[start, end)` in the textarea's live value (not the last rendered state) and puts the
+   * caret after the insert, so typing that arrives before React re-renders is never lost.
+   */
+  function replaceRange(start: number, end: number, insert: string) {
+    const el = ref.current!;
+    const caret = start + insert.length;
+    const next = el.value.slice(0, start) + insert + el.value.slice(end);
+    el.value = next;
+    el.setSelectionRange(caret, caret);
+    setValue(next);
+    setMention(null);
+  }
+
+  /** Enter continues a list; on an empty item it drops the marker and ends the list. */
+  function continueList(item: ListItem, caret: number) {
+    if (item.body.trim()) {
+      replaceRange(caret, caret, `\n${item.next}`);
+      return;
+    }
+    // The caret sits inside the marker, so the whole line goes. The next Enter then sends.
+    const lineStart = item.contentStart - item.marker.length;
+    const atLineEnd = item.end === ref.current!.value.length;
+    replaceRange(atLineEnd && lineStart > 0 ? lineStart - 1 : lineStart, item.end, '');
+  }
+
+  /** ↑ in an empty composer recalls the last message for editing, caret at the end. */
+  function recallLast() {
+    if (!lastOwnMessage || stagedRef.current.length > 0 || !onEdit) return;
+    setEditingId(lastOwnMessage.id);
+    replaceRange(0, ref.current!.value.length, lastOwnMessage.content);
+  }
+
+  /** Leaving the recalled message (Escape, or text cleared) returns Enter to sending. */
+  function stopEditing() {
+    setEditingId(null);
   }
 
   function apply(format: Format) {
@@ -189,7 +267,8 @@ export function Composer({
   }
 
   async function send() {
-    if (!canSend) return;
+    if (editingId && onEdit) return saveEdit();
+    if (!canSubmit) return;
     const content = value.trim();
     const attachmentIds = ready.map((s) => s.attachment!.id);
     setSending(true);
@@ -200,6 +279,26 @@ export function Composer({
       setStaged([]);
     } catch {
       setValue((cur) => (cur.trim() ? cur : content));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  /** Enter over a recalled message saves it in place; blank text cancels the edit. */
+  async function saveEdit() {
+    if (!editingId || !onEdit) return;
+    const content = value.trim();
+    if (!content) {
+      stopEditing();
+      setValue('');
+      return;
+    }
+    setSending(true);
+    try {
+      await onEdit(editingId, content);
+      setValue('');
+      setMention(null);
+      setEditingId(null);
     } finally {
       setSending(false);
     }
@@ -297,9 +396,11 @@ export function Composer({
               <f.Icon size={15} />
             </button>
           ))}
-          <span className="ml-auto pr-1 text-[11px] text-zinc-400">
-            <b>Enter</b> send · <b>Shift+Enter</b> new line · <b>@</b> mention · **bold** _italic_ {'```'} code
-          </span>
+          {!compact && (
+            <span className="ml-auto pr-1 text-[11px] text-zinc-400">
+              <b>Enter</b> {editingId ? 'save' : 'send'} · <b>Shift+Enter</b> new line · <b>↑</b> edit last · **bold** _italic_ {'```'} code
+            </span>
+          )}
         </div>
         <textarea
           ref={ref}
@@ -308,6 +409,7 @@ export function Composer({
           maxLength={MAX}
           placeholder={placeholder}
           onChange={(e) => {
+            // A list opens on the space that follows `-`/`*`/`1.` typed at a line start.
             setValue(e.target.value);
             updateMentionState(e.target.value, e.target.selectionStart);
           }}
@@ -337,12 +439,53 @@ export function Composer({
                 return;
               }
             }
+            const el = e.currentTarget;
+            // While editing a recalled message, Escape drops the edit back to a normal composer.
+            if (editingId && e.key === 'Escape') {
+              e.preventDefault();
+              stopEditing();
+              setValue('');
+              return;
+            }
+            // `-`/`*`/`1.` at a line start + space opens a list. keydown runs before the space is
+            // inserted, so we place the marker and its space ourselves and swallow this keystroke.
+            if (e.key === ' ') {
+              const caret = el.selectionStart;
+              const lineStart = el.value.lastIndexOf('\n', caret - 1) + 1;
+              const bare = BARE_MARKER.exec(el.value.slice(lineStart, caret));
+              const nextChar = el.value[caret];
+              if (bare && (nextChar === undefined || nextChar === '\n') && el.selectionEnd === caret) {
+                e.preventDefault();
+                replaceRange(lineStart, caret, `${bare[1]}${bare[2]} `);
+                return;
+              }
+            }
+            // ↑ only recalls into a truly empty composer; while a popup is open it navigates instead.
+            if (e.key === 'ArrowUp' && value === '' && el.selectionStart === 0 && !mention) {
+              e.preventDefault();
+              recallLast();
+              return;
+            }
             if ((e.ctrlKey || e.metaKey) && !e.altKey) {
               const key = e.key.toLowerCase();
+              if (key === 'enter') {
+                e.preventDefault();
+                void send();
+                return;
+              }
               const shortcut = key === 'b' ? FORMATS[0] : key === 'i' ? FORMATS[1] : key === 'e' ? FORMATS[3] : null;
               if (shortcut) {
                 e.preventDefault();
                 apply(shortcut);
+                return;
+              }
+            }
+            // Enter continues a list; on an empty item it exits the list (the next Enter sends).
+            if (e.key === 'Enter' && !e.shiftKey && !editingId) {
+              const item = listItemAt(el.value, el.selectionStart);
+              if (item) {
+                e.preventDefault();
+                continueList(item, el.selectionStart);
                 return;
               }
             }
@@ -356,15 +499,17 @@ export function Composer({
         />
         <div className="flex items-center justify-between px-2 pb-1.5">
           <span className="pl-1 text-[11px] text-zinc-400">
-            {dragging ? 'Drop files to attach' : `Attach up to ${limits?.max ?? MAX_FILES} files · max ${limits?.mb ?? 25} MB · paste or drop`}
+            {editingId
+              ? 'Editing your last message · Enter save · Esc cancel'
+              : dragging ? 'Drop files to attach' : `Attach up to ${limits?.max ?? MAX_FILES} files · max ${limits?.mb ?? 25} MB · paste or drop`}
           </span>
           <button
             type="button"
             onClick={() => void send()}
-            disabled={!canSend}
+            disabled={!canSubmit}
             className="rounded bg-emerald-600 px-3 py-1 text-xs font-bold text-white disabled:opacity-40"
           >
-            Send
+            {editingId ? 'Save' : 'Send'}
           </button>
         </div>
       </div>

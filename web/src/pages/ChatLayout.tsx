@@ -16,6 +16,7 @@ import MentionsView from './MentionsView';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import { useRealtime } from '../lib/useRealtime';
+import { setReplyCount } from '../lib/replyCounting';
 import { signupBadgeKey } from '../components/SignupsDialog';
 import { useOnlineUsers } from '../lib/usePresence';
 import { useProfile } from '../lib/profile';
@@ -178,6 +179,14 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
   const usingPending = Boolean(activeId && pendingPage?.key === activeId);
   const messages = usingPending ? pendingPage!.messages : messagesData?.messages ?? [];
   const hasMore = usingPending ? pendingPage!.hasMore : (messagesData?.hasMore ?? false);
+  /** The user's latest message here, recalled into the composer with ↑ to be edited in place. */
+  const lastOwnMessage = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.author.id === me.id && !m.deletedAt && m.content) return { id: m.id, content: m.content };
+    }
+    return null;
+  }, [messages, me.id]);
   /** Message to scroll to: the pending page target (jump/around), else a `?m=` link that is in the list. */
   const targetFocus = jumpId ?? pendingPage?.focusId ?? messagesData?.focusId ?? focusId;
 
@@ -385,6 +394,10 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
   }, [focusId, setSearchParams]);
 
   // ---- actions ----
+  const applyReplyCount = useCallback((parentId: string, count: number) => {
+    setReplyCount(qc, setPendingPage, parentId, count);
+  }, [qc]);
+
   const sendMutation = useMutation({
     mutationFn: (body: {
       channelId?: string;
@@ -393,8 +406,8 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
       attachmentIds?: string[];
       parentId?: string;
     }) =>
-      api.post<{ message: Message }>('/messages', body),
-    onSuccess: ({ message }) => {
+      api.post<{ message: Message; parentReplyCount?: number }>('/messages', body),
+    onSuccess: ({ message, parentReplyCount }) => {
       const targetId = message.directConversationId ?? message.channelId;
       if (message.parentId) {
         const key = threadOf(message);
@@ -404,8 +417,8 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
               ? { replies: [...prev.replies, message] }
               : prev);
         }
-        qc.setQueryData<MessagesPage>(['messages', targetId], (prev) =>
-          prev && { ...prev, messages: prev.messages.map((m) => (m.id === message.parentId ? { ...m, replyCount: m.replyCount + 1 } : m)) });
+        // Apply the server's total; the realtime echo carries the same value.
+        if (parentReplyCount !== undefined) applyReplyCount(message.parentId, parentReplyCount);
       } else {
         qc.setQueryData<MessagesPage>(['messages', targetId], (prev) =>
           prev && !prev.messages.some((m) => m.id === message.id)
@@ -429,11 +442,18 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.del(`/messages/${id}`),
-    onSuccess: (_r, id) => {
+    mutationFn: (id: string) => api.del<{ ok: boolean; parentReplyCount?: number }>(`/messages/${id}`),
+    onSuccess: (result, id) => {
       if (threadId === id) closeThread();
+      const reply = qc.getQueriesData<{ replies: Message[] }>({ queryKey: ['thread'] })
+        .flatMap(([, page]) => page?.replies ?? [])
+        .find((m) => m.id === id);
+      if (reply?.parentId && result.parentReplyCount !== undefined) {
+        applyReplyCount(reply.parentId, result.parentReplyCount);
+      }
+      const deletedAt = new Date().toISOString();
       qc.setQueriesData<MessagesPage>({ queryKey: ['messages'] }, (prev) =>
-        prev && { ...prev, messages: prev.messages.map((m) => (m.id === id ? { ...m, deletedAt: new Date().toISOString(), content: '' } : m)) });
+        prev && { ...prev, messages: prev.messages.map((m) => (m.id === id ? { ...m, deletedAt, content: '' } : m)) });
       qc.setQueriesData<{ replies: Message[] }>({ queryKey: ['thread'] }, (prev) =>
         prev && { replies: prev.replies.filter((m) => m.id !== id) });
     },
@@ -525,6 +545,7 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
     onChannelCreated,
     onChannelUpdated,
     onConversationCreated,
+    onReplyCount: applyReplyCount,
     onAccessChanged: () => {
       // A sign-up was accepted or declined: refresh the queue badge and the member list.
       qc.invalidateQueries({ queryKey: signupBadgeKey });
@@ -638,6 +659,8 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
                 <Composer
                   placeholder={conversation ? `Message ${conversation.other.displayName}` : `Message #${channel!.name}`}
                   members={members}
+                  lastOwnMessage={lastOwnMessage}
+                  onEdit={(id, content) => editMutation.mutateAsync({ id, content }).then(() => {})}
                   onSend={async (content, attachmentIds) => {
                     await sendMutation.mutateAsync(
                       conversation

@@ -70,6 +70,27 @@ body {
   color: inherit;
   font-size: inherit;
 }
+.msg-content .code-wrap {
+  position: relative;
+  margin: 4px 0;
+}
+.msg-content .code-wrap > .code-block {
+  margin: 0;
+}
+.msg-content .code-lang {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: #ededf0;
+  color: #71717a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+  pointer-events: none;
+}
 .msg-content .msg-list {
   margin: 2px 0;
   padding-left: 22px;
@@ -120,6 +141,44 @@ body {
   background: #fff3c4;
   color: #8a6100;
 }
+
+/* Prism token colors (light theme, Slack-ish hues) shared by message code blocks and the preview modal */
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata { color: #6a737d; font-style: italic; }
+.token.punctuation { color: #5c6370; }
+.token.namespace { opacity: 0.7; }
+.token.property,
+.token.tag,
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol { color: #0b6b3a; }
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin,
+.token.inserted { color: #a7245c; }
+.token.operator,
+.token.entity,
+.token.url { color: #555; }
+.token.atrule,
+.token.attr-value,
+.token.keyword { color: #7a2aa0; }
+.token.function,
+.token.class-name { color: #1264a3; }
+.token.regex,
+.token.important,
+.token.variable { color: #b3540f; }
+.token.important,
+.token.bold { font-weight: 700; }
+.token.italic { font-style: italic; }
+.token.deleted { color: #b42318; }
+
+.code-preview pre { margin: 0; }
+.code-preview code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
 ::-webkit-scrollbar {
   width: 10px;

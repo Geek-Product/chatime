@@ -24,16 +24,18 @@ interface Options {
   onChannelUpdated: (c: Channel) => void;
   onConversationCreated: (c: Conversation) => void;
   onAccessChanged?: (status: 'approved' | 'declined', workspaceId: string) => void;
+  /** Applies a reply-count change to the visible message list, which may be a paginated snapshot. */
+  onReplyCount?: (parentId: string, count: number) => void;
 }
 
-export function useRealtime({ meId, activeChannelId, activeConversationId, onMention, onOpenNotification, onChannelCreated, onChannelUpdated, onConversationCreated, onAccessChanged }: Options) {
+export function useRealtime({ meId, activeChannelId, activeConversationId, onMention, onOpenNotification, onChannelCreated, onChannelUpdated, onConversationCreated, onAccessChanged, onReplyCount }: Options) {
   const qc = useQueryClient();
   const activeRef = useRef(activeChannelId);
   activeRef.current = activeChannelId;
   const activeDmRef = useRef(activeConversationId);
   activeDmRef.current = activeConversationId;
-  const handlers = useRef({ onMention, onOpenNotification, onChannelCreated, onChannelUpdated, onConversationCreated, onAccessChanged });
-  handlers.current = { onMention, onOpenNotification, onChannelCreated, onChannelUpdated, onConversationCreated, onAccessChanged };
+  const handlers = useRef({ onMention, onOpenNotification, onChannelCreated, onChannelUpdated, onConversationCreated, onAccessChanged, onReplyCount });
+  handlers.current = { onMention, onOpenNotification, onChannelCreated, onChannelUpdated, onConversationCreated, onAccessChanged, onReplyCount };
 
   useEffect(() => {
     const bumpUnread = (channelId: string, mentioned: boolean) => {
@@ -85,22 +87,19 @@ export function useRealtime({ meId, activeChannelId, activeConversationId, onMen
       });
     };
 
-    const upsertInChannel = (msg: Message, mode: 'add' | 'update') => {
+    const upsertInChannel = (msg: Message, mode: 'add' | 'update', parentReplyCount?: number) => {
       // Thread replies live only under the parent's thread key.
       const key = msg.directConversationId ? ['messages', msg.directConversationId] : ['messages', msg.channelId];
       if (msg.parentId) {
-        qc.setQueryData<{ replies: Message[] }>(threadKey(msg.channelId!, msg.parentId), (prev) => {
+        const tKey = threadKey(msg.channelId!, msg.parentId);
+        qc.setQueryData<{ replies: Message[] }>(tKey, (prev) => {
           if (!prev) return prev;
           if (mode === 'add') return prev.replies.some((m) => m.id === msg.id) ? prev : { replies: [...prev.replies, msg] };
           return { replies: prev.replies.map((m) => (m.id === msg.id ? msg : m)) };
         });
-        qc.setQueryData<MessagesPage>(key, (prev) =>
-          prev && {
-            ...prev,
-            messages: prev.messages.map((m) =>
-              m.id === msg.parentId ? { ...m, replyCount: mode === 'add' ? m.replyCount + 1 : m.replyCount } : m,
-            ),
-          });
+        if (mode === 'add' && msg.parentId && parentReplyCount !== undefined) {
+          handlers.current.onReplyCount?.(msg.parentId, parentReplyCount);
+        }
         return;
       }
       qc.setQueryData<MessagesPage>(key, (prev) => {
@@ -129,7 +128,7 @@ export function useRealtime({ meId, activeChannelId, activeConversationId, onMen
           break;
         case 'message.created': {
           const msg = event.message;
-          upsertInChannel(msg, 'add');
+          upsertInChannel(msg, 'add', event.parentReplyCount);
           if (msg.directConversationId) touchConversation(msg.directConversationId, msg);
           if (msg.author.id === meId) return;
           qc.invalidateQueries({ queryKey: ['notifications', 'mentions'] });
@@ -152,10 +151,13 @@ export function useRealtime({ meId, activeChannelId, activeConversationId, onMen
           break;
         case 'message.deleted': {
           const key = event.conversationId ? ['messages', event.conversationId] : ['messages', event.channelId];
-          const clear = (m: Message) =>
-            m.id === event.id ? { ...m, deletedAt: new Date().toISOString(), content: '' } : m;
+          const deletedAt = new Date().toISOString();
+          const clear = (m: Message) => (m.id === event.id ? { ...m, deletedAt, content: '' } : m);
           qc.setQueryData<MessagesPage>(key, (prev) => prev && { ...prev, messages: prev.messages.map(clear) });
           if (event.parentId && event.channelId) {
+            if (event.parentReplyCount !== undefined) {
+              handlers.current.onReplyCount?.(event.parentId, event.parentReplyCount);
+            }
             qc.setQueryData<{ replies: Message[] }>(threadKey(event.channelId, event.parentId), (prev) =>
               prev && { replies: prev.replies.map(clear) });
           }

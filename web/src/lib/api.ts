@@ -171,6 +171,22 @@ export async function downloadAttachment(url: string, filename: string) {
   setTimeout(() => URL.revokeObjectURL(href), 1000);
 }
 
+/** Capped at 1 MB: code previews never need more, and decoding a huge text file blocks the main thread. */
+export const MAX_PREVIEW_BYTES = 1024 * 1024;
+
+/** Fetches an attachment as UTF-8 text for the code preview. */
+export async function fetchAttachmentText(url: string) {
+  let res = await rawRequest(url.replace(/^\/api/, ''), {});
+  if (res.status === 401 && (await refresh())) res = await rawRequest(url.replace(/^\/api/, ''), {});
+  if (!res.ok) throw new ApiError(res.status, 'ERROR', 'Could not load file');
+  if (Number(res.headers.get('content-length') ?? 0) > MAX_PREVIEW_BYTES) {
+    throw new ApiError(413, 'TOO_LARGE', 'File is too large to preview');
+  }
+  const buffer = await res.arrayBuffer();
+  if (buffer.byteLength > MAX_PREVIEW_BYTES) throw new ApiError(413, 'TOO_LARGE', 'File is too large to preview');
+  return new TextDecoder('utf-8').decode(buffer);
+}
+
 export async function logout() {
   await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
   token.accessToken = null;
