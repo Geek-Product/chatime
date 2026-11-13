@@ -35,7 +35,7 @@ const registerBody = credentials.extend({
 });
 
 function publicUser(u: typeof users.$inferSelect, status: 'approved' | 'pending' | 'declined' = 'approved') {
-  return { id: u.id, email: u.email, username: u.username, displayName: u.displayName, avatarColor: u.avatarColor, status };
+  return { id: u.id, email: u.email, username: u.username, displayName: u.displayName, title: u.title, avatarColor: u.avatarColor, status };
 }
 
 async function issueSession(reply: FastifyReply, userId: string) {
@@ -147,6 +147,7 @@ export default async function authRoutes(app: FastifyInstance) {
       displayName: z.string().trim().min(1).max(80).optional(),
       username: z.string().regex(/^[a-zA-Z0-9_.-]{2,32}$/, '2-32 chars: letters, numbers, _ . -').optional(),
       avatarColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Pick a valid color').optional(),
+      title: z.string().trim().max(60).nullable().optional(),
     }).parse(req.body);
 
     if (body.username) {
@@ -162,6 +163,7 @@ export default async function authRoutes(app: FastifyInstance) {
         ...(body.displayName !== undefined ? { displayName: body.displayName } : {}),
         ...(body.username !== undefined ? { username: body.username } : {}),
         ...(body.avatarColor !== undefined ? { avatarColor: body.avatarColor } : {}),
+        ...(body.title !== undefined ? { title: body.title || null } : {}),
       })
       .where(eq(users.id, me.id))
       .returning();
@@ -170,6 +172,7 @@ export default async function authRoutes(app: FastifyInstance) {
       email: updated.email,
       username: updated.username,
       displayName: updated.displayName,
+      title: updated.title,
       avatarColor: updated.avatarColor,
       status: await accessStatusOf(updated.id),
     };
@@ -183,7 +186,7 @@ export default async function authRoutes(app: FastifyInstance) {
       : [];
     hub.broadcastToUsers([...new Set(audience.map((a) => a.userId))], {
       type: 'user.updated',
-      user: { id: user.id, username: user.username, displayName: user.displayName, avatarColor: user.avatarColor },
+      user: { id: user.id, username: user.username, displayName: user.displayName, title: user.title, avatarColor: user.avatarColor },
     });
     return { user };
   });

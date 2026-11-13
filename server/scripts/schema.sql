@@ -104,6 +104,7 @@ CREATE TABLE "chatime"."users" (
 	"email" varchar(255) NOT NULL,
 	"username" varchar(32) NOT NULL,
 	"display_name" varchar(80) NOT NULL,
+	"title" varchar(60),
 	"password_hash" text NOT NULL,
 	"avatar_color" varchar(16) DEFAULT '#5865F2' NOT NULL,
 	"is_bot" boolean DEFAULT false NOT NULL,

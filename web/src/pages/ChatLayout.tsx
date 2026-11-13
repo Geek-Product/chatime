@@ -713,7 +713,10 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
                   title={`View ${m.displayName}'s profile`}
                 >
                   <Avatar name={m.displayName} color={m.avatarColor} size={26} online={online.has(m.id)} />
-                  <span className="truncate text-sm">{m.displayName}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm">
+                    {m.displayName}
+                    {m.title && <span className="ml-1.5 text-[11px] text-zinc-400">{m.title}</span>}
+                  </span>
                   {m.role === 'owner' && <span className="ml-auto text-[10px] font-semibold text-amber-600">owner</span>}
                 </button>
               ))}

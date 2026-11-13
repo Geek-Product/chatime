@@ -11,7 +11,8 @@ export type ServerEvent =
   | { type: 'conversation.created'; conversation: unknown }
   | { type: 'presence'; userId: string; online: boolean }
   | { type: 'member.joined'; workspaceId: string; user: unknown }
-  | { type: 'user.updated'; user: { id: string; username: string; displayName: string; avatarColor: string } }
+  | { type: 'member.role_changed'; workspaceId: string; userId: string; role: 'owner' | 'admin' | 'member' }
+  | { type: 'user.updated'; user: { id: string; username: string; displayName: string; title: string | null; avatarColor: string } }
   | { type: 'notification'; notification: unknown }
   | { type: 'access.changed'; status: 'approved' | 'declined'; workspaceId: string }
   | { type: 'pong' };

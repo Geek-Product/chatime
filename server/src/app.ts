@@ -35,7 +35,7 @@ export async function buildApp() {
   app.decorate('findUserById', async (id: string) => {
     const [u] = await db.select().from(users).where(eq(users.id, id));
     if (!u) return null;
-    return { id: u.id, email: u.email, username: u.username, displayName: u.displayName, avatarColor: u.avatarColor };
+    return { id: u.id, email: u.email, username: u.username, displayName: u.displayName, title: u.title, avatarColor: u.avatarColor };
   });
 
   // Older deployments had messages.channel_id NOT NULL; DMs need it nullable.

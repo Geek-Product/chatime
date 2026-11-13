@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Mail, MessageSquare, Pencil, Shield, UserRound, Webhook, X } from 'lucide-react';
+import { Briefcase, Mail, MessageSquare, Pencil, Shield, UserRound, Webhook, X } from 'lucide-react';
 import { Avatar } from './Avatar';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
@@ -13,6 +13,7 @@ interface ProfileResponse {
     id: string;
     username: string;
     displayName: string;
+    title: string | null;
     avatarColor: string;
     createdAt: string;
     joinedAt: string;
@@ -88,6 +89,13 @@ export function UserProfileCard() {
           {error && <p className="mt-3 rounded bg-red-50 px-2 py-1.5 text-xs text-red-700">{(error as Error).message}</p>}
 
           <dl className="mt-3 space-y-1.5 rounded-lg border border-line bg-panel px-3 py-2 text-xs text-zinc-700">
+            {member?.title && (
+              <div className="flex items-center gap-2">
+                <Briefcase size={13} className="text-zinc-500" />
+                <dt className="text-zinc-500">Title</dt>
+                <dd className="ml-auto font-bold">{member.title}</dd>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <UserRound size={13} className="text-zinc-500" />
               <dt className="text-zinc-500">Role</dt>

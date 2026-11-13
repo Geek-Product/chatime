@@ -231,7 +231,139 @@ function CreateWorkspaceModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function EditWorkspaceModal({ workspace, onClose }: { workspace: Workspace; onClose: () => void }) {
+function MemberRoles({ workspaceId, meId, isOwner }: { workspaceId: string; meId: string; isOwner: boolean }) {
+  const qc = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<{ id: string; email: string } | null>(null);
+  const { data } = useQuery({
+    queryKey: ['members', workspaceId],
+    queryFn: () => api.get<{ members: Member[] }>(`/workspaces/${workspaceId}/members`),
+  });
+  const members = data?.members ?? [];
+
+  const update = useMutation({
+    mutationFn: ({ userId, role, email }: { userId: string; role?: 'admin' | 'member'; email?: string }) =>
+      api.patch<{ member: { id: string; role: Member['role']; email: string } }>(`/workspaces/${workspaceId}/members/${userId}`, {
+        ...(role ? { role } : {}),
+        ...(email ? { email } : {}),
+      }),
+    onSuccess: ({ member }, { role }) => {
+      qc.setQueryData<{ members: Member[] }>(['members', workspaceId], (prev) =>
+        prev && { members: prev.members.map((m) => (m.id === member.id ? { ...m, role: member.role, email: member.email } : m)) });
+      if (role) qc.invalidateQueries({ queryKey: ['access-workspaces'] });
+      setEditing(null);
+      toast.success(role ? 'Member role updated' : 'Email updated');
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
+  // Admins may edit anyone's email except the owner's; only the owner can change roles.
+  const canEditEmail = (m: Member) => !(m.role === 'owner' && !isOwner);
+
+  return (
+    <div className="mt-5 border-t border-line pt-4">
+      <p className="flex items-center gap-1.5 text-sm font-bold text-ink">
+        <UserCheck size={14} /> Members, roles & emails
+      </p>
+      <p className="mt-1 text-xs text-zinc-600">
+        {isOwner
+          ? 'You can promote members to admin and update anyone’s email.'
+          : 'Admins can update member emails; only the workspace owner can change roles.'}
+      </p>
+      <ul className="mt-2 divide-y divide-line rounded-md border border-line" aria-label="Workspace members">
+        {members.map((m) => (
+          <li key={m.id} className="px-3 py-1.5 text-sm">
+            <div className="flex items-center gap-2">
+              <Avatar name={m.displayName} color={m.avatarColor} size={22} />
+              <span className="min-w-0 flex-1 truncate">
+                <span className="font-semibold">{m.displayName}</span>
+                {m.title && <span className="ml-1.5 text-[11px] font-semibold text-zinc-500">{m.title}</span>}
+                {m.id === meId && <span className="ml-1 text-[11px] font-semibold text-zinc-500">you</span>}
+              </span>
+              {m.role === 'owner' ? (
+                <span className="rounded bg-amber-100 px-1.5 text-[10px] font-bold text-amber-800">Owner</span>
+              ) : !isOwner || m.id === meId ? (
+                <span className="text-[11px] font-semibold capitalize text-zinc-500">{m.role}</span>
+              ) : (
+                <select
+                  value={m.role}
+                  disabled={update.isPending}
+                  onChange={(e) => {
+                    setError(null);
+                    update.mutate({ userId: m.id, role: e.target.value as 'admin' | 'member' });
+                  }}
+                  aria-label={`Role for ${m.displayName}`}
+                  className="rounded border border-zinc-400 bg-white px-1.5 py-1 text-xs font-semibold text-ink disabled:opacity-50"
+                >
+                  <option value="member">Member</option>
+                  <option value="admin">Admin</option>
+                </select>
+              )}
+            </div>
+            {m.email && (
+              <div className="mt-1 flex items-center gap-2 pl-7 text-[11px] text-zinc-500">
+                {editing?.id === m.id ? (
+                  <>
+                    <input
+                      autoFocus
+                      type="email"
+                      value={editing.email}
+                      onChange={(e) => setEditing({ id: m.id, email: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') setEditing(null);
+                        if (e.key === 'Enter' && editing.email.trim()) {
+                          setError(null);
+                          update.mutate({ userId: m.id, email: editing.email.trim() });
+                        }
+                      }}
+                      aria-label={`Email for ${m.displayName}`}
+                      className="min-w-0 flex-1 rounded border border-zinc-400 bg-white px-1.5 py-0.5 text-xs text-ink"
+                    />
+                    <button
+                      type="button"
+                      disabled={update.isPending || !editing.email.trim()}
+                      onClick={() => {
+                        setError(null);
+                        update.mutate({ userId: m.id, email: editing.email.trim() });
+                      }}
+                      className="font-bold text-purple-800 hover:underline disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                    <button type="button" onClick={() => setEditing(null)} className="font-semibold hover:underline">
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="min-w-0 flex-1 truncate">{m.email}</span>
+                    {canEditEmail(m) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setError(null);
+                          setEditing({ id: m.id, email: m.email ?? '' });
+                        }}
+                        aria-label={`Edit email for ${m.displayName}`}
+                        className="rounded p-0.5 text-zinc-500 hover:bg-hover hover:text-ink"
+                      >
+                        <Pencil size={11} />
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </li>
+        ))}
+        {members.length === 0 && <li className="px-3 py-2 text-xs text-zinc-500">Loading members…</li>}
+      </ul>
+      {error && <p className="mt-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{error}</p>}
+    </div>
+  );
+}
+
+function EditWorkspaceModal({ workspace, meId, onClose }: { workspace: Workspace; meId: string; onClose: () => void }) {
   const qc = useQueryClient();
   const [name, setName] = useState(workspace.name);
   const [error, setError] = useState<string | null>(null);
@@ -286,6 +418,7 @@ function EditWorkspaceModal({ workspace, onClose }: { workspace: Workspace; onCl
             className="mt-1 w-full rounded-md border border-zinc-400 bg-white px-3 py-2 text-sm text-ink outline-none placeholder:text-zinc-400 focus:border-accent focus:ring-2 focus:ring-accent/30"
           />
         </label>
+        <MemberRoles workspaceId={workspace.id} meId={meId} isOwner={workspace.role === 'owner'} />
         {error && <p className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</p>}
         <div className="mt-6 flex justify-end gap-2 border-t border-line pt-4">
           <button type="button" onClick={onClose} className="rounded-md border border-zinc-400 bg-white px-4 py-2 text-sm font-bold text-ink hover:bg-hover">
@@ -734,7 +867,7 @@ export function Sidebar({
         />
       )}
       {showCreateWorkspace && <CreateWorkspaceModal onClose={() => setShowCreateWorkspace(false)} />}
-      {showEditWorkspace && <EditWorkspaceModal workspace={workspace} onClose={() => setShowEditWorkspace(false)} />}
+      {showEditWorkspace && <EditWorkspaceModal workspace={workspace} meId={me.id} onClose={() => setShowEditWorkspace(false)} />}
       {showNewDm && (
         <NewDmModal
           workspaceId={workspace.id}

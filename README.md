@@ -37,8 +37,10 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f server/scripts/schema.sql   # create 
 npm run db:seed          # demo users, workspace "Acme", channels
 ```
 
-Open http://localhost:5173 and sign in as `alice@example.com` or `bob@example.com` (password
-`password123`; `carol@example.com` works too, seeded as a regular member).
+Open http://localhost:5173 and sign in as `andi@example.com` or `budi@example.com` (password
+`password123`; `sari@example.com` works too, seeded as a regular member). The demo accounts are
+Indonesian (Andi — PM, Budi — Backend, Sari — Fullstack); rerunning `npm run db:seed` refreshes their
+names and titles and renames the old `alice`/`bob`/`carol` demo accounts in place.
 
 ## Project layout
 

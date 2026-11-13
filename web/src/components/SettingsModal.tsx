@@ -118,11 +118,16 @@ function ProfileForm({ me }: { me: User }) {
   const { updateUser } = useAuth();
   const [displayName, setDisplayName] = useState(me.displayName);
   const [username, setUsername] = useState(me.username);
+  const [title, setTitle] = useState(me.title ?? '');
   const [avatarColor, setAvatarColor] = useState(me.avatarColor);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const dirty = displayName.trim() !== me.displayName || username !== me.username || avatarColor !== me.avatarColor;
+  const dirty =
+    displayName.trim() !== me.displayName ||
+    username !== me.username ||
+    title.trim() !== (me.title ?? '') ||
+    avatarColor !== me.avatarColor;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -134,9 +139,15 @@ function ProfileForm({ me }: { me: User }) {
       const res = await api.patch<{ user: User }>('/auth/me', {
         displayName: displayName.trim(),
         username,
+        title: title.trim() || null,
         avatarColor,
       });
-      updateUser({ displayName: res.user.displayName, username: res.user.username, avatarColor: res.user.avatarColor });
+      updateUser({
+        displayName: res.user.displayName,
+        username: res.user.username,
+        title: res.user.title,
+        avatarColor: res.user.avatarColor,
+      });
       toast.success('Profile updated');
     } catch (err) {
       setError((err as Error).message);
@@ -168,6 +179,17 @@ function ProfileForm({ me }: { me: User }) {
           />
         </div>
         <span className="mt-1 block text-xs font-normal text-zinc-500">People mention you with @{username || 'username'}.</span>
+      </label>
+      <label className="block text-xs font-bold text-ink">
+        Title
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          maxLength={60}
+          placeholder="e.g. PM, Backend, Fullstack"
+          className={inputCls}
+        />
+        <span className="mt-1 block text-xs font-normal text-zinc-500">Shown on your profile card and in member lists.</span>
       </label>
       <div className="text-xs font-bold text-ink">
         Avatar color

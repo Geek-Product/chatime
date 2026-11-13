@@ -26,6 +26,8 @@ export const users = pgTable('users', {
   email: varchar('email', { length: 255 }).notNull(),
   username: varchar('username', { length: 32 }).notNull(),
   displayName: varchar('display_name', { length: 80 }).notNull(),
+  /** Job title shown in profiles and member lists, e.g. PM, Backend, Fullstack. */
+  title: varchar('title', { length: 60 }),
   // Bots (webhook authors) can never hold a session and store the sentinel '!bot' instead of a hash.
   passwordHash: text('password_hash').notNull(),
   avatarColor: varchar('avatar_color', { length: 16 }).notNull().default('#5865F2'),

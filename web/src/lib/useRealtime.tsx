@@ -185,6 +185,7 @@ export function useRealtime({ meId, activeChannelId, activeConversationId, onMen
             prev && { ...prev, messages: prev.messages.map((m) => (m.author.id === u.id ? { ...m, author: { ...m.author, ...u } } : m)) });
           qc.setQueriesData<{ replies: Message[] }>({ queryKey: ['thread'] }, (prev) =>
             prev && { replies: prev.replies.map((m) => (m.author.id === u.id ? { ...m, author: { ...m.author, ...u } } : m)) });
+          qc.invalidateQueries({ queryKey: ['member-profile'] });
           break;
         }
         case 'conversation.created':
@@ -192,6 +193,12 @@ export function useRealtime({ meId, activeChannelId, activeConversationId, onMen
           break;
         case 'access.changed':
           handlers.current.onAccessChanged?.(event.status, event.workspaceId);
+          break;
+        case 'member.role_changed':
+          // Also refreshes ['workspaces'] (sidebar role) and ['access-workspaces'] (isAdmin).
+          qc.invalidateQueries({ queryKey: ['members', event.workspaceId] });
+          qc.invalidateQueries({ queryKey: ['workspaces'] });
+          qc.invalidateQueries({ queryKey: ['access-workspaces'] });
           break;
         case 'notification': {
           const n = event.notification;

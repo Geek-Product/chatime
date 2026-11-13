@@ -5,6 +5,8 @@ export interface User {
   email: string;
   username: string;
   displayName: string;
+  /** Job title, e.g. PM, Backend, Fullstack. */
+  title?: string | null;
   avatarColor: string;
   /** Set by the API: accounts wait for an admin to accept their sign-up. */
   status?: AccessStatus;
@@ -78,8 +80,10 @@ export interface Message {
   parentPreview: { id: string; authorName: string; content: string } | null;
 }
 
-export interface Member extends Pick<User, 'id' | 'username' | 'displayName' | 'avatarColor'> {
+export interface Member extends Pick<User, 'id' | 'username' | 'displayName' | 'avatarColor' | 'title'> {
   role: 'owner' | 'admin' | 'member';
+  /** Only returned to workspace owners and admins. */
+  email?: string | null;
 }
 
 /** A person shown in channel member pickers (workspace or channel membership). */
@@ -157,10 +161,11 @@ export type ServerEvent =
   | { type: 'reaction.updated'; messageId: string; reactions: Reaction[] }
   | { type: 'channel.created'; channel: Channel }
   | { type: 'channel.updated'; channel: Channel }
-  | { type: 'user.updated'; user: Pick<User, 'id' | 'username' | 'displayName' | 'avatarColor'> }
+  | { type: 'user.updated'; user: Pick<User, 'id' | 'username' | 'displayName' | 'title' | 'avatarColor'> }
   | { type: 'conversation.created'; conversation: Conversation }
   | { type: 'presence'; userId: string; online: boolean }
   | { type: 'notification'; notification: MentionNotification }
   | { type: 'access.changed'; status: 'approved' | 'declined'; workspaceId: string }
+  | { type: 'member.role_changed'; workspaceId: string; userId: string; role: 'owner' | 'admin' | 'member' }
   | { type: 'ping' }
   | { type: 'pong' };

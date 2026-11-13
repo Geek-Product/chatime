@@ -6,7 +6,7 @@ import { channelMembers, channels, users, workspaceMembers, workspaces } from '.
 import { assertWorkspaceAdmin, assertWorkspaceMember } from '../lib/access';
 import { adminWorkspaceIds } from '../lib/access-status';
 import { authenticate, requireUser } from '../lib/auth';
-import { conflict, forbidden, notFound } from '../lib/errors';
+import { badRequest, conflict, forbidden, notFound } from '../lib/errors';
 import { hub } from '../lib/hub';
 
 const slugify = (s: string) =>
@@ -69,12 +69,14 @@ export default async function workspaceRoutes(app: FastifyInstance) {
   app.get('/workspaces/:workspaceId/members', async (req) => {
     const user = requireUser(req);
     const { workspaceId } = z.object({ workspaceId: z.string().uuid() }).parse(req.params);
-    await assertWorkspaceMember(workspaceId, user.id);
+    const me = await assertWorkspaceMember(workspaceId, user.id);
     const rows = await db
       .select({
         id: users.id,
         username: users.username,
         displayName: users.displayName,
+        title: users.title,
+        email: users.email,
         avatarColor: users.avatarColor,
         role: workspaceMembers.role,
       })
@@ -82,7 +84,9 @@ export default async function workspaceRoutes(app: FastifyInstance) {
       .innerJoin(users, eq(users.id, workspaceMembers.userId))
       .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(users.isBot, false)))
       .orderBy(users.displayName);
-    return { members: rows };
+    // Emails are only exposed to owners/admins, who are the only ones allowed to edit them.
+    const canSeeEmails = me.role !== 'member';
+    return { members: rows.map(({ email, ...rest }) => ({ ...rest, email: canSeeEmails ? email : null })) };
   });
 
   app.get('/workspaces/:workspaceId/members/:userId', async (req) => {
@@ -94,6 +98,7 @@ export default async function workspaceRoutes(app: FastifyInstance) {
         id: users.id,
         username: users.username,
         displayName: users.displayName,
+        title: users.title,
         avatarColor: users.avatarColor,
         createdAt: users.createdAt,
         role: workspaceMembers.role,
@@ -105,6 +110,64 @@ export default async function workspaceRoutes(app: FastifyInstance) {
       .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)));
     if (!row) throw notFound('This person is not a member of this workspace');
     return { member: row };
+  });
+
+  app.patch('/workspaces/:workspaceId/members/:userId', async (req) => {
+    const user = requireUser(req);
+    const { workspaceId, userId } = z.object({ workspaceId: z.string().uuid(), userId: z.string().uuid() }).parse(req.params);
+    const me = await assertWorkspaceMember(workspaceId, user.id);
+    const body = z
+      .object({
+        role: z.enum(['admin', 'member']).optional(),
+        email: z.string().trim().email('Enter a valid email').max(255).optional(),
+      })
+      .refine((b) => b.role !== undefined || b.email !== undefined, 'Nothing to change')
+      .parse(req.body);
+    if (body.role !== undefined && me.role !== 'owner') {
+      throw forbidden('Only the workspace owner can change member roles');
+    }
+    if (body.email !== undefined && me.role === 'member') {
+      throw forbidden('Only workspace owners and admins can change emails');
+    }
+
+    const [target] = await db
+      .select({ role: workspaceMembers.role, email: users.email, bot: users.isBot })
+      .from(workspaceMembers)
+      .innerJoin(users, eq(users.id, workspaceMembers.userId))
+      .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)));
+    if (!target) throw notFound('This person is not a member of this workspace');
+    if (target.bot) throw badRequest('Webhook bots do not have an email');
+
+    if (body.role !== undefined) {
+      if (userId === user.id) throw badRequest('You cannot change your own role');
+      if (target.role === 'owner') throw badRequest("The workspace owner's role cannot be changed");
+    }
+    if (body.email !== undefined) {
+      // Admins must not be able to take over the owner's account by changing their login.
+      if (target.role === 'owner' && me.role !== 'owner') {
+        throw forbidden("Only the workspace owner can change the owner's email");
+      }
+      if (body.email !== target.email) {
+        const [taken] = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(sql`lower(${users.email}) = lower(${body.email})`);
+        if (taken && taken.id !== userId) throw conflict('That email is already in use', 'ALREADY_EXISTS');
+      }
+    }
+
+    if (body.role !== undefined) {
+      await db
+        .update(workspaceMembers)
+        .set({ role: body.role })
+        .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)));
+      hub.broadcastToWorkspace(workspaceId, { type: 'member.role_changed', workspaceId, userId, role: body.role });
+    }
+    if (body.email !== undefined && body.email !== target.email) {
+      await db.update(users).set({ email: body.email }).where(eq(users.id, userId));
+    }
+
+    return { member: { id: userId, role: body.role ?? target.role, email: body.email ?? target.email } };
   });
 
   app.get('/workspaces/:workspaceId/channels', async (req) => {
