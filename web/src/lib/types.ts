@@ -8,6 +8,8 @@ export interface User {
   /** Job title, e.g. PM, Backend, Fullstack. */
   title?: string | null;
   avatarColor: string;
+  /** Relative URL of an uploaded profile photo; null means colored initials. */
+  avatarUrl?: string | null;
   /** Set by the API: accounts wait for an admin to accept their sign-up. */
   status?: AccessStatus;
   /** Webhook/integration authors: rendered like people but cannot sign in. */
@@ -43,7 +45,7 @@ export interface Reaction {
 export interface Conversation {
   id: string;
   workspaceId: string;
-  other: Pick<User, 'id' | 'username' | 'displayName' | 'avatarColor'>;
+  other: Pick<User, 'id' | 'username' | 'displayName' | 'avatarColor' | 'avatarUrl'>;
   lastMessageAt: string | null;
   lastPreview: string | null;
   lastAuthorIsMe: boolean;
@@ -70,7 +72,7 @@ export interface Message {
   createdAt: string;
   editedAt: string | null;
   deletedAt: string | null;
-  author: Pick<User, 'id' | 'username' | 'displayName' | 'avatarColor'>;
+  author: Pick<User, 'id' | 'username' | 'displayName' | 'avatarColor' | 'avatarUrl'>;
   reactions: Reaction[];
   attachments: Attachment[];
   mentionUsernames: string[];
@@ -80,14 +82,14 @@ export interface Message {
   parentPreview: { id: string; authorName: string; content: string } | null;
 }
 
-export interface Member extends Pick<User, 'id' | 'username' | 'displayName' | 'avatarColor' | 'title'> {
+export interface Member extends Pick<User, 'id' | 'username' | 'displayName' | 'avatarColor' | 'avatarUrl' | 'title'> {
   role: 'owner' | 'admin' | 'member';
   /** Only returned to workspace owners and admins. */
   email?: string | null;
 }
 
 /** A person shown in channel member pickers (workspace or channel membership). */
-export type ChannelPerson = Pick<User, 'id' | 'username' | 'displayName' | 'avatarColor'>;
+export type ChannelPerson = Pick<User, 'id' | 'username' | 'displayName' | 'avatarColor' | 'avatarUrl'>;
 
 export interface UnreadChannel {
   channelId: string;
@@ -161,7 +163,7 @@ export type ServerEvent =
   | { type: 'reaction.updated'; messageId: string; reactions: Reaction[] }
   | { type: 'channel.created'; channel: Channel }
   | { type: 'channel.updated'; channel: Channel }
-  | { type: 'user.updated'; user: Pick<User, 'id' | 'username' | 'displayName' | 'title' | 'avatarColor'> }
+  | { type: 'user.updated'; user: Pick<User, 'id' | 'username' | 'displayName' | 'title' | 'avatarColor' | 'avatarUrl'> }
   | { type: 'conversation.created'; conversation: Conversation }
   | { type: 'presence'; userId: string; online: boolean }
   | { type: 'notification'; notification: MentionNotification }

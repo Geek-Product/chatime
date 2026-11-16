@@ -204,7 +204,7 @@ export function WebhooksSection({ channelId, workspaceId }: { channelId: string;
             setError(null);
             create.mutate();
           }}
-          className="mt-2 flex items-center gap-1 rounded-md bg-purple-800 px-3 py-1.5 text-sm font-bold text-white hover:bg-purple-900 disabled:opacity-50"
+          className="mt-2 flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 text-sm font-bold text-white hover:bg-accent-hover disabled:opacity-50"
         >
           <Plus size={13} /> {create.isPending ? 'Creating…' : 'Create webhook'}
         </button>

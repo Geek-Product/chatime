@@ -50,7 +50,7 @@ export function MemberPicker({
               className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm text-ink hover:bg-hover"
             >
               <input type="checkbox" checked={checked} onChange={() => onToggle(p.id)} aria-label={`Invite ${p.displayName}`} />
-              <Avatar name={p.displayName} color={p.avatarColor} size={22} online={online?.has(p.id)} />
+              <Avatar name={p.displayName} color={p.avatarColor} photo={p.avatarUrl} size={22} online={online?.has(p.id)} />
               <span className="truncate font-semibold">{p.displayName}</span>
               <span className="truncate text-xs text-zinc-500">@{p.username}</span>
             </label>

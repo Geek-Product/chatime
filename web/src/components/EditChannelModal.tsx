@@ -187,7 +187,7 @@ export function EditChannelModal({
             type="button"
             disabled={toInvite.size === 0 || invite.isPending}
             onClick={() => invite.mutate([...toInvite])}
-            className="mt-2 rounded-md bg-purple-800 px-3 py-1.5 text-sm font-bold text-white hover:bg-purple-900 disabled:opacity-50"
+            className="mt-2 rounded-md bg-accent px-3 py-1.5 text-sm font-bold text-white hover:bg-accent-hover disabled:opacity-50"
           >
             {invite.isPending ? 'Adding…' : `Add ${toInvite.size || ''} to channel`.replace('  ', ' ')}
           </button>
@@ -198,7 +198,7 @@ export function EditChannelModal({
           <ul className="mt-2 divide-y divide-line rounded-md border border-line" aria-label="Channel members">
             {channelMembers.map((m) => (
               <li key={m.id} className="flex items-center gap-2 px-3 py-1.5 text-sm">
-                <Avatar name={m.displayName} color={m.avatarColor} size={22} />
+                <Avatar name={m.displayName} color={m.avatarColor} photo={m.avatarUrl} size={22} />
                 <span className="truncate font-semibold">{m.displayName}</span>
                 <span className="truncate text-xs text-zinc-500">@{m.username}</span>
                 {m.id === meId ? (
@@ -231,7 +231,7 @@ export function EditChannelModal({
           <button
             type="submit"
             disabled={busy}
-            className="rounded-md bg-purple-800 px-4 py-2 text-sm font-bold text-white hover:bg-purple-900 disabled:opacity-50"
+            className="rounded-md bg-accent px-4 py-2 text-sm font-bold text-white hover:bg-accent-hover disabled:opacity-50"
           >
             Save changes
           </button>

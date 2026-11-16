@@ -11,6 +11,7 @@ interface SignupRequest {
   displayName: string;
   email: string;
   avatarColor: string;
+  avatarUrl?: string | null;
   createdAt: string;
   message: string | null;
 }
@@ -106,7 +107,7 @@ export function SignupsDialog({
             <ul className="space-y-2" aria-label="Pending sign-ups">
               {users.map((u) => (
                 <li key={u.id} className="flex items-start gap-3 rounded-lg border border-zinc-200 p-3">
-                  <Avatar name={u.displayName} color={u.avatarColor} size={38} />
+                  <Avatar name={u.displayName} color={u.avatarColor} photo={u.avatarUrl} size={38} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-ink">
                       {u.displayName} <span className="font-normal text-zinc-500">@{u.username}</span>

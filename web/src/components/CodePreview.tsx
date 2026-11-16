@@ -61,7 +61,7 @@ export function CodePreview({ attachment, onClose }: { attachment: Attachment; o
         onMouseDown={(e) => e.stopPropagation()}
       >
         <header className="flex items-center gap-3 border-b border-line px-4 py-2.5">
-          <span className="flex h-6 min-w-6 items-center justify-center rounded bg-purple-50 px-1.5 text-[10px] font-bold text-accent">
+          <span className="flex h-6 min-w-6 items-center justify-center rounded bg-accent-soft px-1.5 text-[10px] font-bold text-accent">
             {languageLabel(lang) ?? 'FILE'}
           </span>
           <div className="min-w-0">

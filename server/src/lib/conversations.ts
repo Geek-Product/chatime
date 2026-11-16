@@ -1,6 +1,7 @@
 import { and, eq, or, sql } from 'drizzle-orm';
 import { db } from '../db/index';
 import { directConversations, users } from '../db/schema';
+import { avatarUrl } from './avatar';
 import { authorColumns } from './messages';
 
 export type SerializedConversation = Awaited<ReturnType<typeof listConversations>>[number];
@@ -46,7 +47,7 @@ function toDto(r: Row) {
   return {
     id: r.id,
     workspaceId: r.workspaceId,
-    other: r.other,
+    other: (({ avatarAttachmentId, ...other }) => ({ ...other, avatarUrl: avatarUrl(avatarAttachmentId) }))(r.other),
     lastMessageAt: r.lastMessageAt ? new Date(r.lastMessageAt).toISOString() : null,
     // Strip formatting markers so the sidebar preview reads like plain text.
     lastPreview: r.lastPreview ? r.lastPreview.replace(/[*_~`]/g, '').slice(0, 120) : null,

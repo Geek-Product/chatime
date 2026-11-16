@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { type AuthResponse, api, applySession, bootstrapSession, logout as apiLogout, setAccessToken } from './api';
+import { resetPresence } from './presence';
+import { socket } from './socket';
 import type { User } from './types';
 
 interface AuthContextValue {
@@ -9,7 +11,7 @@ interface AuthContextValue {
   register: (data: { email: string; username: string; displayName: string; password: string; message?: string }) => Promise<void>;
   logout: () => Promise<void>;
   setStatus: (status: 'approved' | 'pending' | 'declined') => void;
-  updateUser: (patch: Partial<Pick<User, 'username' | 'displayName' | 'avatarColor' | 'title'>>) => void;
+  updateUser: (patch: Partial<Pick<User, 'username' | 'displayName' | 'avatarColor' | 'title' | 'avatarUrl'>>) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -26,6 +28,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const apply = useCallback((session: AuthResponse) => {
     applySession(session);
+    // Start the new session on a fresh socket: an old tab's connection would never re-send `hello`.
+    socket.stop();
+    resetPresence();
     setUser(session.user);
   }, []);
 
@@ -38,6 +43,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [apply]);
 
   const logout = useCallback(async () => {
+    // Close the socket first so the server marks this user offline for everyone else.
+    socket.stop();
+    resetPresence();
     await apiLogout();
     setAccessToken(null);
     setUser(null);
@@ -47,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser((prev) => (prev ? { ...prev, status } : prev));
   }, []);
 
-  const updateUser = useCallback((patch: Partial<Pick<User, 'username' | 'displayName' | 'avatarColor' | 'title'>>) => {
+  const updateUser = useCallback((patch: Partial<Pick<User, 'username' | 'displayName' | 'avatarColor' | 'title' | 'avatarUrl'>>) => {
     setUser((prev) => (prev ? { ...prev, ...patch } : prev));
   }, []);
 

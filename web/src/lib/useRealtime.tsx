@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { accessTokenExpiringSoon, ensureFreshAccessToken, getAccessToken, refreshSession } from './api';
 import { socket } from './socket';
-import { setOnlineUser } from './presence';
+import { replaceOnlineUsers, setOnlineUser } from './presence';
 import { playMentionSound, playMessageSound } from './sound';
 import type { Channel, ChannelPerson, Conversation, Member, MentionNotification, Message, ServerEvent, UnreadResponse } from './types';
 
@@ -121,7 +121,7 @@ export function useRealtime({ meId, activeChannelId, activeConversationId, onMen
             jump: [],
             ...event.unread,
           }));
-          for (const id of event.online) setOnlineUser(id, true);
+          replaceOnlineUsers(event.online);
           break;
         case 'presence':
           setOnlineUser(event.userId, event.online);

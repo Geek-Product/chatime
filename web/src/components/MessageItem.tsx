@@ -119,7 +119,7 @@ export function MessageItem({
           </div>
         ) : (
           <NameButton author={message.author} shape="avatar">
-            <Avatar name={message.author.displayName} color={message.author.avatarColor} />
+            <Avatar name={message.author.displayName} color={message.author.avatarColor} photo={message.author.avatarUrl} />
           </NameButton>
         )}
 

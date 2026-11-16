@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 
 /** Sidebar presets: `bg` is applied inline so any color the user picks works, the rest drives derived styles. */
 export const THEMES = {
-  aubergine: { label: 'Aubergine', bg: '#4a154b', text: '#f4eef4' },
+  geekgarden: { label: 'GeekGarden', bg: '#0a1d3d', text: '#eef2f9' },
   forest: { label: 'Forest', bg: '#1f3d2e', text: '#eaf5ee' },
   twilight: { label: 'Twilight', bg: '#1d2b53', text: '#e8edf8' },
   graphite: { label: 'Graphite', bg: '#2b2b2f', text: '#f1f1f3' },
@@ -50,8 +50,8 @@ export function textOn(bg: string) {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<ThemeName | 'custom'>(() => {
-    const saved = read<string>(THEME_KEY, 'aubergine');
-    return saved in THEMES ? (saved as ThemeName) : 'aubergine';
+    const saved = read<string>(THEME_KEY, 'geekgarden');
+    return saved in THEMES ? (saved as ThemeName) : 'geekgarden';
   });
   const [custom, setCustomState] = useState<string | null>(() => {
     const saved = read<string | null>(CUSTOM_KEY, null);
@@ -87,7 +87,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       setThemeState('custom');
     } else {
       setCustomState(null);
-      setThemeState((t) => (t === 'custom' ? 'aubergine' : t));
+      setThemeState((t) => (t === 'custom' ? 'geekgarden' : t));
     }
   }, []);
 

@@ -201,7 +201,7 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
         kind: 'dm',
         name: conversation.other.displayName,
         subtitle: `This is the beginning of your direct message history with @${conversation.other.username}.`,
-        avatar: { name: conversation.other.displayName, color: conversation.other.avatarColor, online: online.has(conversation.other.id) },
+        avatar: { name: conversation.other.displayName, color: conversation.other.avatarColor, photo: conversation.other.avatarUrl, online: online.has(conversation.other.id) },
       };
     }
     if (channel) {
@@ -608,6 +608,7 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
                 displayName: conversation.other.displayName,
                 username: conversation.other.username,
                 avatarColor: conversation.other.avatarColor,
+                avatarUrl: conversation.other.avatarUrl,
                 online: online.has(conversation.other.id),
               }
             : null}
@@ -622,6 +623,7 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
               displayName: d.displayName,
               username: d.username,
               avatarColor: d.avatarColor,
+              avatarUrl: d.avatarUrl,
               online: d.online,
             })
           }
@@ -712,7 +714,7 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
                   className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-hover"
                   title={`View ${m.displayName}'s profile`}
                 >
-                  <Avatar name={m.displayName} color={m.avatarColor} size={26} online={online.has(m.id)} />
+                  <Avatar name={m.displayName} color={m.avatarColor} photo={m.avatarUrl} size={26} online={online.has(m.id)} />
                   <span className="min-w-0 flex-1 truncate text-sm">
                     {m.displayName}
                     {m.title && <span className="ml-1.5 text-[11px] text-zinc-400">{m.title}</span>}

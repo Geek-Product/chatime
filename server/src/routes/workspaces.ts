@@ -6,6 +6,7 @@ import { channelMembers, channels, users, workspaceMembers, workspaces } from '.
 import { assertWorkspaceAdmin, assertWorkspaceMember } from '../lib/access';
 import { adminWorkspaceIds } from '../lib/access-status';
 import { authenticate, requireUser } from '../lib/auth';
+import { avatarUrl } from '../lib/avatar';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors';
 import { hub } from '../lib/hub';
 
@@ -78,6 +79,7 @@ export default async function workspaceRoutes(app: FastifyInstance) {
         title: users.title,
         email: users.email,
         avatarColor: users.avatarColor,
+        avatarAttachmentId: users.avatarAttachmentId,
         role: workspaceMembers.role,
       })
       .from(workspaceMembers)
@@ -86,7 +88,13 @@ export default async function workspaceRoutes(app: FastifyInstance) {
       .orderBy(users.displayName);
     // Emails are only exposed to owners/admins, who are the only ones allowed to edit them.
     const canSeeEmails = me.role !== 'member';
-    return { members: rows.map(({ email, ...rest }) => ({ ...rest, email: canSeeEmails ? email : null })) };
+    return {
+      members: rows.map(({ email, avatarAttachmentId, ...rest }) => ({
+        ...rest,
+        avatarUrl: avatarUrl(avatarAttachmentId),
+        email: canSeeEmails ? email : null,
+      })),
+    };
   });
 
   app.get('/workspaces/:workspaceId/members/:userId', async (req) => {
@@ -100,6 +108,7 @@ export default async function workspaceRoutes(app: FastifyInstance) {
         displayName: users.displayName,
         title: users.title,
         avatarColor: users.avatarColor,
+        avatarAttachmentId: users.avatarAttachmentId,
         createdAt: users.createdAt,
         role: workspaceMembers.role,
         joinedAt: workspaceMembers.joinedAt,
@@ -109,7 +118,8 @@ export default async function workspaceRoutes(app: FastifyInstance) {
       .innerJoin(users, eq(users.id, workspaceMembers.userId))
       .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)));
     if (!row) throw notFound('This person is not a member of this workspace');
-    return { member: row };
+    const { avatarAttachmentId, ...member } = row;
+    return { member: { ...member, avatarUrl: avatarUrl(avatarAttachmentId) } };
   });
 
   app.patch('/workspaces/:workspaceId/members/:userId', async (req) => {

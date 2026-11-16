@@ -7,6 +7,7 @@ export interface AuthUser {
   email: string;
   title: string | null;
   avatarColor: string;
+  avatarAttachmentId: string | null;
 }
 
 declare module 'fastify' {

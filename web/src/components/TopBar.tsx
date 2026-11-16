@@ -27,11 +27,11 @@ export function TopBar({
   onEditChannel,
 }: {
   channel: Channel | null;
-  dm?: { id: string; displayName: string; username: string; avatarColor: string; online: boolean } | null;
+  dm?: { id: string; displayName: string; username: string; avatarColor: string; avatarUrl?: string | null; online: boolean } | null;
   membersOpen: boolean;
   onToggleMembers: () => void;
   onOpenMention: (m: SavedMention) => void;
-  onOpenProfile?: (dm: { id: string; displayName: string; username: string; avatarColor: string; online: boolean }) => void;
+  onOpenProfile?: (dm: { id: string; displayName: string; username: string; avatarColor: string; avatarUrl?: string | null; online: boolean }) => void;
   onEditChannel?: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -79,7 +79,7 @@ export function TopBar({
               title={`View ${dm.displayName}'s profile`}
             >
               {dm.avatarColor ? (
-                <Avatar name={dm.displayName} color={dm.avatarColor} size={22} online={dm.online} />
+                <Avatar name={dm.displayName} color={dm.avatarColor} photo={dm.avatarUrl} size={22} online={dm.online} />
               ) : (
                 <UserRound size={14} className="text-zinc-500" />
               )}
@@ -149,7 +149,7 @@ export function TopBar({
           <button
             type="button"
             onClick={onToggleMembers}
-            className={`rounded p-2 hover:bg-hover ${membersOpen ? 'text-purple-800' : 'text-zinc-600'}`}
+            className={`rounded p-2 hover:bg-hover ${membersOpen ? 'text-accent' : 'text-zinc-600'}`}
             aria-label="Toggle members"
           >
             <UserRound size={18} />

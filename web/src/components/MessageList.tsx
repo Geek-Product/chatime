@@ -8,7 +8,7 @@ export interface HeaderInfo {
   kind: 'channel' | 'dm';
   name: string;
   subtitle?: string | null;
-  avatar?: { name: string; color: string; online?: boolean };
+  avatar?: { name: string; color: string; photo?: string | null; online?: boolean };
 }
 
 interface Props {
@@ -98,8 +98,8 @@ export function MessageList(props: Props) {
     if (!focusMessageId) return;
     const el = document.getElementById(`m-${focusMessageId}`);
     if (el) {
-      el.classList.add('ring-2', 'ring-purple-400');
-      setTimeout(() => el.classList.remove('ring-2', 'ring-purple-400'), 2500);
+      el.classList.add('ring-2', 'ring-accent');
+      setTimeout(() => el.classList.remove('ring-2', 'ring-accent'), 2500);
     }
   }, [focusMessageId, messages.length]);
 
@@ -127,7 +127,7 @@ export function MessageList(props: Props) {
         <div className="border-b border-line px-5 pt-10 pb-4">
           <h1 className="flex items-center gap-2 text-2xl font-bold">
             {props.header.avatar && (
-              <Avatar name={props.header.avatar.name} color={props.header.avatar.color} size={28} online={props.header.avatar.online} />
+              <Avatar name={props.header.avatar.name} color={props.header.avatar.color} photo={props.header.avatar.photo} size={28} online={props.header.avatar.online} />
             )}
             <span>{props.header.kind === 'dm' ? props.header.name : `#${props.header.name}`}</span>
           </h1>
@@ -195,7 +195,7 @@ export function MessageList(props: Props) {
         <button
           type="button"
           onClick={() => scrollToBottom(true)}
-          className="absolute right-6 bottom-36 flex items-center gap-1 rounded-full border border-line bg-white px-3 py-1 text-xs font-semibold text-purple-800 shadow-md hover:bg-hover"
+          className="absolute right-6 bottom-36 flex items-center gap-1 rounded-full border border-line bg-white px-3 py-1 text-xs font-semibold text-accent shadow-md hover:bg-hover"
         >
           <ArrowDown size={14} /> Jump to latest
         </button>

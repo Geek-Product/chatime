@@ -39,7 +39,7 @@ export default function MentionsView({
               key={m.messageId}
               type="button"
               onClick={() => onOpen(m)}
-              className={`block w-full rounded-lg border bg-white p-4 text-left transition hover:border-purple-300 hover:shadow-sm ${
+              className={`block w-full rounded-lg border bg-white p-4 text-left transition hover:border-accent/40 hover:shadow-sm ${
                 m.readAt ? 'border-line' : 'border-amber-300 bg-amber-50/40'
               }`}
             >

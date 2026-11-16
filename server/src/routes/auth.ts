@@ -3,9 +3,11 @@ import { and, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { env } from '../../env';
 import { db } from '../db/index';
-import { joinRequests, refreshTokens, users, workspaceMembers } from '../db/schema';
+import { attachments, joinRequests, refreshTokens, users, workspaceMembers } from '../db/schema';
 import { hub } from '../lib/hub';
 import { getWorkspaceIdsForUser } from '../lib/access';
+import { avatarUrl } from '../lib/avatar';
+import { deleteStoredFiles } from '../lib/attachments';
 import {
   ACCESS_TOKEN_TTL_SECONDS,
   AVATAR_COLORS,
@@ -35,7 +37,7 @@ const registerBody = credentials.extend({
 });
 
 function publicUser(u: typeof users.$inferSelect, status: 'approved' | 'pending' | 'declined' = 'approved') {
-  return { id: u.id, email: u.email, username: u.username, displayName: u.displayName, title: u.title, avatarColor: u.avatarColor, status };
+  return { id: u.id, email: u.email, username: u.username, displayName: u.displayName, title: u.title, avatarColor: u.avatarColor, avatarUrl: avatarUrl(u.avatarAttachmentId), status };
 }
 
 async function issueSession(reply: FastifyReply, userId: string) {
@@ -148,7 +150,20 @@ export default async function authRoutes(app: FastifyInstance) {
       username: z.string().regex(/^[a-zA-Z0-9_.-]{2,32}$/, '2-32 chars: letters, numbers, _ . -').optional(),
       avatarColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Pick a valid color').optional(),
       title: z.string().trim().max(60).nullable().optional(),
+      /** Attachment id from a prior POST /attachments, or null to remove the photo. */
+      avatarAttachmentId: z.string().uuid().nullable().optional(),
     }).parse(req.body);
+
+    let oldAvatar: typeof attachments.$inferSelect | undefined;
+    if (body.avatarAttachmentId) {
+      const [photo] = await db.select().from(attachments).where(eq(attachments.id, body.avatarAttachmentId));
+      if (!photo || photo.uploaderId !== me.id || !photo.mimeType.startsWith('image/') || photo.messageId) {
+        throw badRequest('Upload a photo first, then pick it as your avatar');
+      }
+    }
+    if (body.avatarAttachmentId !== undefined && me.avatarAttachmentId && body.avatarAttachmentId !== me.avatarAttachmentId) {
+      [oldAvatar] = await db.select().from(attachments).where(eq(attachments.id, me.avatarAttachmentId));
+    }
 
     if (body.username) {
       const [taken] = await db
@@ -164,9 +179,15 @@ export default async function authRoutes(app: FastifyInstance) {
         ...(body.username !== undefined ? { username: body.username } : {}),
         ...(body.avatarColor !== undefined ? { avatarColor: body.avatarColor } : {}),
         ...(body.title !== undefined ? { title: body.title || null } : {}),
+        ...(body.avatarAttachmentId !== undefined ? { avatarAttachmentId: body.avatarAttachmentId } : {}),
       })
       .where(eq(users.id, me.id))
       .returning();
+    // A replaced photo is unreachable from now on; drop its row and file.
+    if (oldAvatar) {
+      await db.delete(attachments).where(eq(attachments.id, oldAvatar.id));
+      await deleteStoredFiles([oldAvatar.storageKey]);
+    }
     const user = {
       id: updated.id,
       email: updated.email,
@@ -174,6 +195,7 @@ export default async function authRoutes(app: FastifyInstance) {
       displayName: updated.displayName,
       title: updated.title,
       avatarColor: updated.avatarColor,
+      avatarUrl: avatarUrl(updated.avatarAttachmentId),
       status: await accessStatusOf(updated.id),
     };
     // Name/avatar changes are visible in everyone's message list and member sidebar.
@@ -186,13 +208,13 @@ export default async function authRoutes(app: FastifyInstance) {
       : [];
     hub.broadcastToUsers([...new Set(audience.map((a) => a.userId))], {
       type: 'user.updated',
-      user: { id: user.id, username: user.username, displayName: user.displayName, title: user.title, avatarColor: user.avatarColor },
+      user: { id: user.id, username: user.username, displayName: user.displayName, title: user.title, avatarColor: user.avatarColor, avatarUrl: user.avatarUrl },
     });
     return { user };
   });
 
   app.get('/auth/me', { preHandler: authenticate }, async (req) => {
     const me = requireUser(req);
-    return { user: { ...me, status: await accessStatusOf(me.id) } };
+    return { user: { ...me, avatarUrl: avatarUrl(me.avatarAttachmentId), status: await accessStatusOf(me.id) } };
   });
 }

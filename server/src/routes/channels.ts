@@ -6,6 +6,7 @@ import { channelMembers, channels, users, workspaceMembers } from '../db/schema'
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors';
 import { assertWorkspaceMember, getChannelForUser } from '../lib/access';
 import { authenticate, requireUser } from '../lib/auth';
+import { avatarUrl } from '../lib/avatar';
 import { hub } from '../lib/hub';
 import { latestMessages, serializeMessages } from '../lib/messages';
 
@@ -54,12 +55,15 @@ export default async function channelRoutes(app: FastifyInstance) {
         username: users.username,
         displayName: users.displayName,
         avatarColor: users.avatarColor,
+        avatarAttachmentId: users.avatarAttachmentId,
       })
       .from(channelMembers)
       .innerJoin(users, eq(users.id, channelMembers.userId))
       .where(and(eq(channelMembers.channelId, channelId), eq(users.isBot, false)))
       .orderBy(users.displayName);
-    return { members: rows };
+    return {
+      members: rows.map(({ avatarAttachmentId, ...m }) => ({ ...m, avatarUrl: avatarUrl(avatarAttachmentId) })),
+    };
   });
 
   /** Adds workspace members to the channel (idempotent). Any channel member may invite. */

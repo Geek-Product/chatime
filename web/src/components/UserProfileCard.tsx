@@ -15,6 +15,7 @@ interface ProfileResponse {
     displayName: string;
     title: string | null;
     avatarColor: string;
+    avatarUrl: string | null;
     createdAt: string;
     joinedAt: string;
     role: Member['role'];
@@ -52,7 +53,9 @@ export function UserProfileCard() {
   const me = userRef.current;
   const isMe = me?.id === target.userId;
   // After a profile edit the card shows the new name/color immediately, without reopening it.
-  const shown = isMe && me ? { ...target, displayName: me.displayName, username: me.username, avatarColor: me.avatarColor } : target;
+  const shown = isMe && me
+    ? { ...target, displayName: me.displayName, username: me.username, avatarColor: me.avatarColor, avatarUrl: me.avatarUrl }
+    : target;
 
   return (
     <>
@@ -73,7 +76,7 @@ export function UserProfileCard() {
         </button>
         <div className="-mt-7 px-4 pb-4">
           <div className="rounded-md bg-white p-1" style={{ width: 60 }}>
-            <Avatar name={shown.displayName} color={shown.avatarColor} size={52} online={target.online} />
+            <Avatar name={shown.displayName} color={shown.avatarColor} photo={shown.avatarUrl ?? member?.avatarUrl} size={52} online={target.online} />
           </div>
           <h3 className="mt-2 text-lg leading-tight font-bold text-ink">{shown.displayName}</h3>
           <p className="text-sm font-semibold text-zinc-600">

@@ -73,7 +73,7 @@ export default function AccessPendingPage({ onStatusChange }: { onStatusChange: 
     <div className="flex min-h-full items-center justify-center bg-[#f4ede4] px-4 py-12">
       <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-8 shadow-sm" role="status">
         <div className="flex items-center gap-3">
-          {user && <Avatar name={user.displayName} color={user.avatarColor} size={48} />}
+          {user && <Avatar name={user.displayName} color={user.avatarColor} photo={user.avatarUrl} size={48} />}
           <div className="min-w-0">
             <p className="truncate text-lg font-bold text-ink">Hi {user?.displayName ?? 'there'}</p>
             <p className="truncate text-sm text-zinc-500">{user?.email}</p>
@@ -132,7 +132,7 @@ export default function AccessPendingPage({ onStatusChange }: { onStatusChange: 
               type="button"
               onClick={() => void check()}
               disabled={checking}
-              className="mt-6 flex w-full items-center justify-center gap-2 rounded-md bg-accent py-2.5 text-sm font-bold text-white transition hover:bg-purple-900 disabled:opacity-60"
+              className="mt-6 flex w-full items-center justify-center gap-2 rounded-md bg-accent py-2.5 text-sm font-bold text-white transition hover:bg-accent-hover disabled:opacity-60"
             >
               <RefreshCw size={15} className={checking ? 'animate-spin' : undefined} />
               {checking ? 'Checking…' : 'Check again'}

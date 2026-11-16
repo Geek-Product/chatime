@@ -143,7 +143,7 @@ function CreateChannelModal({
           <button
             type="submit"
             disabled={!name || create.isPending}
-            className="rounded-md bg-purple-800 px-4 py-2 text-sm font-bold text-white hover:bg-purple-900 disabled:opacity-50"
+            className="rounded-md bg-accent px-4 py-2 text-sm font-bold text-white hover:bg-accent-hover disabled:opacity-50"
           >
             Create
           </button>
@@ -221,7 +221,7 @@ function CreateWorkspaceModal({ onClose }: { onClose: () => void }) {
           <button
             type="submit"
             disabled={!name.trim() || create.isPending}
-            className="rounded-md bg-purple-800 px-4 py-2 text-sm font-bold text-white hover:bg-purple-900 disabled:opacity-50"
+            className="rounded-md bg-accent px-4 py-2 text-sm font-bold text-white hover:bg-accent-hover disabled:opacity-50"
           >
             {create.isPending ? 'Creating…' : 'Create workspace'}
           </button>
@@ -274,7 +274,7 @@ function MemberRoles({ workspaceId, meId, isOwner }: { workspaceId: string; meId
         {members.map((m) => (
           <li key={m.id} className="px-3 py-1.5 text-sm">
             <div className="flex items-center gap-2">
-              <Avatar name={m.displayName} color={m.avatarColor} size={22} />
+              <Avatar name={m.displayName} color={m.avatarColor} photo={m.avatarUrl} size={22} />
               <span className="min-w-0 flex-1 truncate">
                 <span className="font-semibold">{m.displayName}</span>
                 {m.title && <span className="ml-1.5 text-[11px] font-semibold text-zinc-500">{m.title}</span>}
@@ -326,7 +326,7 @@ function MemberRoles({ workspaceId, meId, isOwner }: { workspaceId: string; meId
                         setError(null);
                         update.mutate({ userId: m.id, email: editing.email.trim() });
                       }}
-                      className="font-bold text-purple-800 hover:underline disabled:opacity-50"
+                      className="font-bold text-accent hover:underline disabled:opacity-50"
                     >
                       Save
                     </button>
@@ -427,7 +427,7 @@ function EditWorkspaceModal({ workspace, meId, onClose }: { workspace: Workspace
           <button
             type="submit"
             disabled={!name.trim() || name.trim() === workspace.name || save.isPending}
-            className="rounded-md bg-purple-800 px-4 py-2 text-sm font-bold text-white hover:bg-purple-900 disabled:opacity-50"
+            className="rounded-md bg-accent px-4 py-2 text-sm font-bold text-white hover:bg-accent-hover disabled:opacity-50"
           >
             {save.isPending ? 'Saving…' : 'Save changes'}
           </button>
@@ -516,7 +516,7 @@ function NewDmModal({
               onClick={() => open.mutate({ userId: m.id })}
               className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-ink hover:bg-hover disabled:opacity-50"
             >
-              <Avatar name={m.displayName} color={m.avatarColor} size={24} online={online.has(m.id)} />
+              <Avatar name={m.displayName} color={m.avatarColor} photo={m.avatarUrl} size={24} online={online.has(m.id)} />
               <span className="font-bold">{m.displayName}</span>
               <span className="truncate text-zinc-600">@{m.username}</span>
               {existing.has(m.id) && (
@@ -610,12 +610,12 @@ export function Sidebar({
         onClick={() => navigate(`/w/${workspace.id}/d/${c.id}`)}
         className={clsx(
           'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm',
-          isActive ? 'bg-white/90 font-bold text-purple-900' : 'text-white/70 hover:bg-white/10 hover:text-white',
+          isActive ? 'bg-brand-yellow font-bold text-ink' : 'text-white/70 hover:bg-white/10 hover:text-white',
           !isActive && u > 0 ? 'font-bold text-white' : '',
         )}
         title={c.lastPreview ?? `Start a conversation with ${c.other.displayName}`}
       >
-        <Avatar name={c.other.displayName} color={c.other.avatarColor} size={18} online={isOnline} />
+        <Avatar name={c.other.displayName} color={c.other.avatarColor} photo={c.other.avatarUrl} size={18} online={isOnline} />
         <span className={clsx('truncate', !isActive && (isOnline ? 'text-white' : 'text-white/60'))}>{c.other.displayName}</span>
         {u > 0 && (
           <span className="ml-auto rounded-full bg-white/20 px-1.5 text-[10px] font-bold text-white">{u}</span>
@@ -635,7 +635,7 @@ export function Sidebar({
         onClick={() => navigate(`/w/${workspace.id}/c/${ch.id}`)}
         className={clsx(
           'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm',
-          isActive ? 'bg-white/90 font-bold text-purple-900' : 'text-white/70 hover:bg-white/10 hover:text-white',
+          isActive ? 'bg-brand-yellow font-bold text-ink' : 'text-white/70 hover:bg-white/10 hover:text-white',
           !isActive && u?.unread ? 'font-bold text-white' : '',
         )}
       >
@@ -675,7 +675,7 @@ export function Sidebar({
             aria-expanded={showSwitcher}
             aria-label="Switch workspace"
           >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white/20 font-bold">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-yellow font-bold text-ink">
               {workspace.name[0]}
             </span>
             <span className="min-w-0 flex-1 text-left">
@@ -731,7 +731,7 @@ export function Sidebar({
                   setShowSwitcher(false);
                   setShowCreateWorkspace(true);
                 }}
-                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm font-semibold text-purple-800 hover:bg-hover"
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm font-semibold text-accent hover:bg-hover"
               >
                 <Plus size={14} /> New workspace
               </button>
@@ -754,7 +754,7 @@ export function Sidebar({
           onClick={() => navigate(`/w/${workspace.id}/mentions`)}
           className={clsx(
             'mb-2 flex w-full items-center gap-2 rounded-md px-2 py-1 text-sm',
-            location.pathname.endsWith('/mentions') ? 'bg-white/90 font-bold text-purple-900' : 'text-white/70 hover:bg-white/10',
+            location.pathname.endsWith('/mentions') ? 'bg-brand-yellow font-bold text-ink' : 'text-white/70 hover:bg-white/10',
           )}
         >
           <AtSign size={14} />
@@ -773,7 +773,7 @@ export function Sidebar({
             <UserCheck size={14} />
             <span>Sign-ups</span>
             {pendingSignups > 0 && (
-              <span className="ml-auto rounded-full bg-amber-400 px-1.5 text-[10px] font-bold text-black">{pendingSignups}</span>
+              <span className="ml-auto rounded-full bg-brand-yellow px-1.5 text-[10px] font-bold text-ink">{pendingSignups}</span>
             )}
           </button>
         )}
@@ -835,7 +835,7 @@ export function Sidebar({
               className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm text-white/70 hover:bg-white/10 hover:text-white"
               title={`View ${m.displayName}'s profile`}
             >
-              <Avatar name={m.displayName} color={m.avatarColor} size={20} online={online.has(m.id)} />
+              <Avatar name={m.displayName} color={m.avatarColor} photo={m.avatarUrl} size={20} online={online.has(m.id)} />
               <span className="truncate">{m.displayName}</span>
               {m.id === me.id && <span className="text-[10px] text-white/50">you</span>}
               {m.role === 'owner' && <span className="ml-auto text-[10px] text-amber-300">owner</span>}
@@ -853,7 +853,7 @@ export function Sidebar({
         aria-label="Open settings"
         className="flex items-center gap-2 border-t border-white/15 px-4 py-3 text-sm text-white/80 hover:bg-white/10"
       >
-        <Avatar name={me.displayName} color={me.avatarColor} size={28} />
+        <Avatar name={me.displayName} color={me.avatarColor} photo={me.avatarUrl} size={28} />
         <span className="truncate font-semibold">{me.displayName}</span>
         <Settings size={16} className="ml-auto" />
       </button>

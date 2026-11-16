@@ -9,6 +9,7 @@ import {
   Loader2,
   Paperclip,
   Quote,
+  Smile,
   Strikethrough,
   X,
 } from 'lucide-react';
@@ -17,6 +18,8 @@ import { api, uploadAttachment } from '../lib/api';
 import type { Attachment, Member } from '../lib/types';
 import { toggleInline, toggleLinePrefix } from './MessageText';
 import { formatBytes, keepPreview } from './AttachmentView';
+import { EmojiPicker } from './EmojiPicker';
+import { useDismiss } from '../lib/useDismiss';
 
 const MAX = 8000;
 const MAX_FILES = 10;
@@ -97,12 +100,16 @@ export function Composer({
   const [staged, setStaged] = useState<Staged[]>([]);
   const [dragging, setDragging] = useState(false);
   const [limits, setLimits] = useState<{ mb: number; max: number } | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [mention, setMention] = useState<{ query: string; start: number; index: number } | null>(null);
   /** Set while the composer holds a recalled message; Enter saves it instead of sending. */
   const [editingId, setEditingId] = useState<string | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
   const dragDepth = useRef(0);
+
+  useDismiss(pickerRef, pickerOpen, () => setPickerOpen(false));
 
   const uploading = staged.some((s) => !s.attachment && !s.failed);
   const ready = staged.filter((s) => s.attachment);
@@ -215,6 +222,26 @@ export function Composer({
     });
   }
 
+  /** Drops an emoji in at the caret, keeping the picker open for the next one. */
+  function insertEmoji(emoji: string) {
+    const el = ref.current;
+    if (!el) return;
+    const start = el.selectionStart ?? el.value.length;
+    replaceRange(start, el.selectionEnd ?? start, emoji);
+    requestAnimationFrame(() => el.focus());
+  }
+
+  /** Stickers and GIFs are sent immediately as their own image message. */
+  async function sendPickedMedia(url: string, label: string) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Could not load ${label.replace('-', ' ')}`);
+    const blob = await res.blob();
+    const ext = url.toLowerCase().endsWith('.gif') ? 'gif' : 'png';
+    const type = blob.type.startsWith('image/') ? blob.type : ext === 'gif' ? 'image/gif' : 'image/png';
+    const attachment = await uploadAttachment(new File([blob], `${label}.${ext}`, { type }));
+    await onSend('', [attachment.id]);
+  }
+
   function addFiles(files: File[]) {
     const maxMb = limits?.mb ?? 25;
     const maxFiles = limits?.max ?? MAX_FILES;
@@ -319,7 +346,7 @@ export function Composer({
                 e.preventDefault();
                 pickMention(m.username);
               }}
-              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm ${i === mention?.index ? 'bg-purple-50' : 'hover:bg-hover'}`}
+              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm ${i === mention?.index ? 'bg-accent-soft' : 'hover:bg-hover'}`}
             >
               <span className="h-5 w-5 rounded" style={{ background: m.avatarColor }} />
               <span className="font-semibold">{m.username}</span>
@@ -360,7 +387,7 @@ export function Composer({
           </div>
         )}
 
-        <div className="flex items-center gap-0.5 border-b border-line px-1.5 py-1" role="toolbar" aria-label="Formatting">
+        <div className="relative flex items-center gap-0.5 border-b border-line px-1.5 py-1" role="toolbar" aria-label="Formatting">
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
@@ -380,6 +407,25 @@ export function Composer({
               e.target.value = '';
             }}
           />
+          <button
+            type="button"
+            onClick={() => setPickerOpen((v) => !v)}
+            title="Emoji, stickers and GIFs"
+            aria-label="Emoji, stickers and GIFs"
+            aria-expanded={pickerOpen}
+            className={`rounded p-1.5 hover:bg-hover hover:text-ink ${pickerOpen ? 'bg-hover text-accent' : 'text-zinc-500'}`}
+          >
+            <Smile size={15} />
+          </button>
+          {pickerOpen && (
+            <div ref={pickerRef} className="absolute bottom-full left-0 z-30 mb-2">
+              <EmojiPicker
+                onPickEmoji={insertEmoji}
+                onSendMedia={sendPickedMedia}
+                onClose={() => setPickerOpen(false)}
+              />
+            </div>
+          )}
           <span className="mx-1 h-4 w-px bg-line" />
           {FORMATS.map((f) => (
             <button
@@ -507,7 +553,7 @@ export function Composer({
             type="button"
             onClick={() => void send()}
             disabled={!canSubmit}
-            className="rounded bg-emerald-600 px-3 py-1 text-xs font-bold text-white disabled:opacity-40"
+            className="rounded bg-accent px-3 py-1 text-xs font-bold text-white hover:bg-accent-hover disabled:opacity-40"
           >
             {editingId ? 'Save' : 'Send'}
           </button>

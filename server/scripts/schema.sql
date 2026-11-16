@@ -107,6 +107,7 @@ CREATE TABLE "chatime"."users" (
 	"title" varchar(60),
 	"password_hash" text NOT NULL,
 	"avatar_color" varchar(16) DEFAULT '#5865F2' NOT NULL,
+	"avatar_attachment_id" uuid,
 	"is_bot" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );

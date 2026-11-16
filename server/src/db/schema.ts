@@ -31,6 +31,8 @@ export const users = pgTable('users', {
   // Bots (webhook authors) can never hold a session and store the sentinel '!bot' instead of a hash.
   passwordHash: text('password_hash').notNull(),
   avatarColor: varchar('avatar_color', { length: 16 }).notNull().default('#5865F2'),
+  /** Uploaded profile photo, stored as an attachment the user owns; falls back to the colored initials. */
+  avatarAttachmentId: uuid('avatar_attachment_id'),
   isBot: boolean('is_bot').notNull().default(false),
   createdAt: createdAt(),
 }, (t) => [

@@ -12,7 +12,7 @@ export type ServerEvent =
   | { type: 'presence'; userId: string; online: boolean }
   | { type: 'member.joined'; workspaceId: string; user: unknown }
   | { type: 'member.role_changed'; workspaceId: string; userId: string; role: 'owner' | 'admin' | 'member' }
-  | { type: 'user.updated'; user: { id: string; username: string; displayName: string; title: string | null; avatarColor: string } }
+  | { type: 'user.updated'; user: { id: string; username: string; displayName: string; title: string | null; avatarColor: string; avatarUrl: string | null } }
   | { type: 'notification'; notification: unknown }
   | { type: 'access.changed'; status: 'approved' | 'declined'; workspaceId: string }
   | { type: 'pong' };

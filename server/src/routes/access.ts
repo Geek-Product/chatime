@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db } from '../db/index';
 import { channelMembers, channels, joinRequests, users, workspaceMembers } from '../db/schema';
 import { accessStatusOf, adminWorkspaceIds } from '../lib/access-status';
+import { avatarUrl } from '../lib/avatar';
 import { authenticate, requireUser } from '../lib/auth';
 import { getWorkspaceIdsForUser } from '../lib/access';
 import { forbidden, notFound } from '../lib/errors';
@@ -30,6 +31,7 @@ async function pendingUsers() {
       displayName: users.displayName,
       email: users.email,
       avatarColor: users.avatarColor,
+      avatarAttachmentId: users.avatarAttachmentId,
       createdAt: joinRequests.createdAt,
       message: joinRequests.message,
     })
@@ -67,7 +69,8 @@ export default async function accessRoutes(app: FastifyInstance) {
     const me = requireUser(req);
     const { workspaceId } = workspaceParams.parse(req.params);
     await requireAdmin(me.id, workspaceId);
-    return { users: await pendingUsers() };
+    const users = await pendingUsers();
+    return { users: users.map(({ avatarAttachmentId, ...u }) => ({ ...u, avatarUrl: avatarUrl(avatarAttachmentId) })) };
   });
 
   app.post('/workspaces/:workspaceId/access-requests/:userId/approve', async (req) => {

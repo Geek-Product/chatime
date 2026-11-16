@@ -17,6 +17,8 @@ class SocketClient {
   private heartbeat: number | undefined;
   private stopped = true;
   private status: Status = 'idle';
+  /** Last `hello` snapshot: replayed to subscribers that attach after the socket opened. */
+  private lastHello: Extract<ServerEvent, { type: 'hello' }> | null = null;
 
   start(getToken: () => string | null, refreshIfNeeded?: () => Promise<boolean>) {
     this.getToken = getToken;
@@ -42,6 +44,7 @@ class SocketClient {
     this.stopped = true;
     this.listeners.clear();
     this.verifying = false;
+    this.lastHello = null;
     clearTimeout(this.reconnectTimer);
     clearInterval(this.heartbeat);
     const ws = this.ws;
@@ -55,6 +58,8 @@ class SocketClient {
 
   subscribe(fn: Listener) {
     this.listeners.add(fn);
+    // A screen that mounts after the handshake (e.g. approved -> chat) still needs the snapshot.
+    if (this.lastHello) fn(this.lastHello);
     return () => {
       this.listeners.delete(fn);
     };
@@ -65,6 +70,7 @@ class SocketClient {
     if (this.stopped || !ws) return;
     this.status = 'idle';
     this.ws = null;
+    this.lastHello = null;
     ws.onclose = null;
     ws.close();
     clearInterval(this.heartbeat);
@@ -109,6 +115,7 @@ class SocketClient {
       if (this.ws !== ws) return;
       try {
         const event = JSON.parse(ev.data) as ServerEvent;
+        if (event.type === 'hello') this.lastHello = event;
         // The server drops sockets that never answer its heartbeat.
         if ((event as { type: string }).type === 'ping') {
           this.send({ type: 'pong' });
@@ -122,6 +129,7 @@ class SocketClient {
     ws.onclose = (ev) => {
       if (this.ws !== ws) return;
       this.ws = null;
+      this.lastHello = null;
       this.status = 'idle';
       clearInterval(this.heartbeat);
       if (this.stopped) return;

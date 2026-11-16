@@ -26,13 +26,13 @@ export default function LoginPage() {
     }
   }
 
-  const input = 'mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-purple-700 focus:ring-2 focus:ring-purple-200';
+  const input = 'mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/30';
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-[#f4ede4] px-4 py-12">
+    <div className="flex min-h-full items-center justify-center bg-accent-soft px-4 py-12">
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent text-2xl text-white shadow-lg">💬</div>
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-yellow text-2xl text-accent shadow-lg">💬</div>
           <h1 className="text-2xl font-bold tracking-tight">Team Chat</h1>
           <p className="mt-1 text-sm text-zinc-600">Where your team gets work done.</p>
         </div>
@@ -104,7 +104,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={busy}
-            className="mt-5 w-full rounded-md bg-accent py-2.5 text-sm font-bold text-white transition hover:bg-purple-900 disabled:opacity-60"
+            className="mt-5 w-full rounded-md bg-accent py-2.5 text-sm font-bold text-white transition hover:bg-accent-hover disabled:opacity-60"
           >
             {busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Request access'}
           </button>
@@ -113,7 +113,7 @@ export default function LoginPage() {
             {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
             <button
               type="button"
-              className="font-semibold text-purple-800 hover:underline"
+              className="font-semibold text-accent hover:underline"
               onClick={() => {
                 setMode(mode === 'login' ? 'register' : 'login');
                 setError(null);
@@ -126,7 +126,7 @@ export default function LoginPage() {
         </form>
 
         <p className="mt-4 text-center text-xs text-zinc-500">
-          Demo: alice@example.com / bob@example.com · password123
+          Demo: andi@example.com / budi@example.com · password123
         </p>
       </div>
     </div>

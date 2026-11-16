@@ -12,6 +12,7 @@ export interface ProfileTarget {
   displayName: string;
   username: string;
   avatarColor: string;
+  avatarUrl?: string | null;
   online: boolean;
 }
 

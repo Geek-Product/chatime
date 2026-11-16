@@ -6,7 +6,11 @@
   --color-panel: #f8f8f8;
   --color-hover: #f0f0f1;
   --color-line: #e4e4e7;
-  --color-accent: #4a154b;
+  /* GeekGarden brand palette, sampled from logo-geekgarden.png. */
+  --color-accent: #0a1d3d;
+  --color-accent-hover: #13294f;
+  --color-accent-soft: #eef1f7;
+  --color-brand-yellow: #f5c324;
 }
 
 html, body, #root {
@@ -22,9 +26,9 @@ body {
 
 /* Sidebar theme (customizable in Preferences) */
 .sidebar-root {
-  background: var(--sb-bg, #4a154b);
+  background: var(--sb-bg, #0a1d3d);
   color: var(--sb-text, #fff);
-  --color-accent: var(--sb-bg, #4a154b);
+  --color-accent: var(--sb-bg, #0a1d3d);
 }
 
 /* Slack-style message formatting (applied to escaped plain text) */
@@ -128,8 +132,8 @@ body {
   font-weight: 700;
 }
 .mention-pill {
-  background: #e8f5fa;
-  color: #1264a3;
+  background: #eef1f7;
+  color: #0a1d3d;
   border-radius: 3px;
   padding: 0 2px;
   font-weight: 700;
@@ -138,8 +142,8 @@ body {
   text-decoration: underline;
 }
 .mention-pill.me {
-  background: #fff3c4;
-  color: #8a6100;
+  background: #f5c324;
+  color: #1d1c1d;
 }
 
 /* Prism token colors (light theme, Slack-ish hues) shared by message code blocks and the preview modal */

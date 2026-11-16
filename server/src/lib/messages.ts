@@ -4,6 +4,7 @@ import { env } from '../../env';
 import { db } from '../db/index';
 import { channelMembers, messageMentions, messages, reactions, users, workspaceMembers } from '../db/schema';
 import { attachmentsForMessages, toAttachmentDto } from './attachments';
+import { avatarUrl } from './avatar';
 import { hub } from './hub';
 import { sendPushToUsers } from './push';
 import { broadcastToTarget, targetWorkspaceId, type MessageTarget } from './targets';
@@ -14,6 +15,7 @@ export const authorColumns = {
   username: users.username,
   displayName: users.displayName,
   avatarColor: users.avatarColor,
+  avatarAttachmentId: users.avatarAttachmentId,
 };
 
 const parent = alias(messages, 'parent');
@@ -91,7 +93,7 @@ export async function serializeMessages(ids: string[], viewerId: string) {
       createdAt: r.createdAt.toISOString(),
       editedAt: r.editedAt?.toISOString() ?? null,
       deletedAt: r.deletedAt?.toISOString() ?? null,
-      author: r.author,
+      author: (({ avatarAttachmentId, ...author }) => ({ ...author, avatarUrl: avatarUrl(avatarAttachmentId) }))(r.author),
       reactions: [...grouped.values()],
       attachments: r.deletedAt
         ? []

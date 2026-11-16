@@ -120,6 +120,13 @@ export function authTokenQuery() {
   return t ? `?token=${encodeURIComponent(t)}` : '';
 }
 
+/** URL for images the browser loads directly (`<img src>`); appends the access token as a query param. */
+export function assetUrl(path: string) {
+  const t = token.accessToken;
+  if (!t) return path;
+  return `${path}${path.includes('?') ? '&' : '?'}token=${encodeURIComponent(t)}`;
+}
+
 /** Uploads one file; `onProgress` reports 0..1 while the body streams. */
 export function uploadAttachment(file: File, onProgress?: (fraction: number) => void): Promise<import('./types').Attachment> {
   const send = (retry: boolean) =>

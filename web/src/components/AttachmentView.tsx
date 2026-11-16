@@ -131,7 +131,7 @@ function FileAttachment({ attachment }: { attachment: Attachment }) {
         className="flex max-w-sm items-center gap-2.5 rounded-lg border border-line bg-white px-3 py-2 text-left hover:border-zinc-400 hover:bg-hover"
         title={code ? `Preview ${attachment.filename}` : `Download ${attachment.filename}`}
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-purple-50 text-accent">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent">
           <Icon size={18} />
         </span>
         <span className="min-w-0">
