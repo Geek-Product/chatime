@@ -1,0 +1,118 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+jobs:
+  detect-env:
+    runs-on: [self-hosted, linux, x64]
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      tag: ${{ steps.env.outputs.tag }}
+      ssh_host: ${{ steps.env.outputs.ssh_host }}
+      infisical_env: ${{ steps.env.outputs.infisical_env }}
+    steps:
+      - name: Determine environment from branch
+        id: env
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "environment=prod"       >> "$GITHUB_OUTPUT"
+            echo "tag=prod"               >> "$GITHUB_OUTPUT"
+            echo "ssh_host=${{ secrets.PROD_SSH_HOST || secrets.SSH_HOST }}" >> "$GITHUB_OUTPUT"
+            echo "infisical_env=prod"     >> "$GITHUB_OUTPUT"
+          else
+            echo "environment=dev"       >> "$GITHUB_OUTPUT"
+            echo "tag=dev"               >> "$GITHUB_OUTPUT"
+            echo "ssh_host=${{ secrets.DEV_SSH_HOST || secrets.SSH_HOST }}" >> "$GITHUB_OUTPUT"
+            echo "infisical_env=dev"     >> "$GITHUB_OUTPUT"
+          fi
+
+  test:
+    name: Typecheck and build
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+
+  build-push:
+    runs-on: [self-hosted, linux, x64]
+    needs: [detect-env, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ needs.detect-env.outputs.tag }}
+            ${{ env.IMAGE_NAME }}:${{ needs.detect-env.outputs.tag }}-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    runs-on: [self-hosted, linux, x64]
+    needs: [detect-env, build-push]
+    environment: ${{ needs.detect-env.outputs.environment }}
+    steps:
+      - name: Copy compose file to target
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ needs.detect-env.outputs.ssh_host }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          source: deploy/chatime.compose.yml,deploy/deploy.sh
+          target: /opt/chatime/
+          strip_components: 1
+          overwrite: true
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          INFISICAL_ENV: ${{ needs.detect-env.outputs.infisical_env }}
+        with:
+          host: ${{ needs.detect-env.outputs.ssh_host }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          envs: INFISICAL_ENV
+          script: |
+            set -euo pipefail
+            chmod +x /opt/chatime/deploy.sh
+            # Render secrets from Infisical for this environment and pipe them
+            # into deploy.sh, which exports them for docker compose.
+            infisical secrets --env "$INFISICAL_ENV" \
+              --format=dotenv --silent > /tmp/chatime.env
+            set -a; . /tmp/chatime.env; set +a
+            rm -f /tmp/chatime.env
+            /opt/chatime/deploy.sh ${{ env.IMAGE_NAME }}:${{ needs.detect-env.outputs.tag }}-${{ github.sha }}
