@@ -1,0 +1,29 @@
+# Build and run directly from checked-out source on deployment server.
+# Keep .env on server; never commit it.
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: chatime:local
+    container_name: chatime-app
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      PORT: 4001
+      NODE_ENV: production
+      UPLOAD_DIR: /app/server/uploads
+    ports:
+      - "${CHATIME_PORT:-4001}:4001"
+    volumes:
+      - chatime-uploads:/app/server/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:4001/api/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+volumes:
+  chatime-uploads:

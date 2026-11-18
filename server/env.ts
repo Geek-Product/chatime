@@ -6,7 +6,7 @@ config({ path: path.resolve(import.meta.dirname, '../.env') });
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().default(4000),
+  PORT: z.coerce.number().default(4001),
   CLIENT_ORIGIN: z.string().default('http://localhost:5173'),
   APP_URL: z.string().default('http://localhost:5173'),
   DATABASE_URL: z.string().default('postgres://postgres:postgres@localhost:5433/team_chat'),

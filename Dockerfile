@@ -26,10 +26,10 @@ COPY --from=build --chown=node:node /app/web/dist ./web/dist
 
 USER node
 
-EXPOSE 4000
+EXPOSE 4001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD curl -fsS http://127.0.0.1:${PORT:-4000}/api/health || exit 1
+  CMD curl -fsS http://127.0.0.1:${PORT:-4001}/api/health || exit 1
 
 WORKDIR /app/server
 CMD ["npm", "start"]
