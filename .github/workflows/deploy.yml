@@ -2,60 +2,19 @@ name: Build & Deploy
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
   group: deploy-${{ github.ref_name }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read
-  packages: write
-
-env:
-  IMAGE_NAME: ghcr.io/${{ github.repository }}
 
 jobs:
-  detect-env:
-    runs-on: [self-hosted, linux, x64]
-    outputs:
-      environment: ${{ steps.env.outputs.environment }}
-      tag: ${{ steps.env.outputs.tag }}
-      ssh_host: ${{ steps.env.outputs.ssh_host }}
-      infisical_env: ${{ steps.env.outputs.infisical_env }}
-    steps:
-      - name: Determine environment from branch
-        id: env
-        run: |
-          if [ "${{ github.ref_name }}" = "main" ]; then
-            echo "environment=prod"       >> "$GITHUB_OUTPUT"
-            echo "tag=prod"               >> "$GITHUB_OUTPUT"
-            echo "ssh_host=${{ secrets.PROD_SSH_HOST || secrets.SSH_HOST }}" >> "$GITHUB_OUTPUT"
-            echo "infisical_env=prod"     >> "$GITHUB_OUTPUT"
-          else
-            echo "environment=dev"       >> "$GITHUB_OUTPUT"
-            echo "tag=dev"               >> "$GITHUB_OUTPUT"
-            echo "ssh_host=${{ secrets.DEV_SSH_HOST || secrets.SSH_HOST }}" >> "$GITHUB_OUTPUT"
-            echo "infisical_env=dev"     >> "$GITHUB_OUTPUT"
-          fi
-
-  test:
-    name: Typecheck and build
-    runs-on: [self-hosted, linux, x64]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm run build
-
   build-push:
     runs-on: [self-hosted, linux, x64]
-    needs: [detect-env, test]
     steps:
       - uses: actions/checkout@v4
 
@@ -74,45 +33,90 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ env.IMAGE_NAME }}:${{ needs.detect-env.outputs.tag }}
-            ${{ env.IMAGE_NAME }}:${{ needs.detect-env.outputs.tag }}-${{ github.sha }}
+            ghcr.io/${{ github.repository }}:main-${{ github.sha }}
+            ghcr.io/${{ github.repository }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   deploy:
+    needs: build-push
     runs-on: [self-hosted, linux, x64]
-    needs: [detect-env, build-push]
-    environment: ${{ needs.detect-env.outputs.environment }}
+    environment: prod
     steps:
-      - name: Copy compose file to target
+      - name: Render .env from secrets
+        id: env
+        run: |
+          set -euo pipefail
+          # Validate required secrets before rendering; an empty value fails the run.
+          required=(APP_URL DATABASE_URL CHATIME_DATABASE_URL JWT_SECRET \
+                     VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY UPLOAD_MAX_MB)
+          for v in "${required[@]}"; do
+            if [ -z "${!v:-}" ]; then
+              echo "::error::Missing required secret: $v"
+              exit 1
+            fi
+          done
+
+          # Quoted heredoc delimiter keeps shell from re-expanding any $ in secrets.
+          cat > .env.rendered <<'EOF'
+          PORT=4001
+          CHATIME_PORT=4001
+          CLIENT_ORIGIN=${{ secrets.CLIENT_ORIGIN }}
+          APP_URL=${{ secrets.APP_URL }}
+          NODE_ENV=production
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          CHATIME_DATABASE_URL=${{ secrets.CHATIME_DATABASE_URL }}
+          UPLOAD_DIR=server/uploads
+          UPLOAD_MAX_MB=${{ secrets.UPLOAD_MAX_MB }}
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          ACCESS_TOKEN_TTL=15m
+          REFRESH_TOKEN_TTL_DAYS=30
+          VAPID_PUBLIC_KEY=${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY=${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT=${{ secrets.VAPID_SUBJECT }}
+          EOF
+          chmod 600 .env.rendered
+          echo "env_file=.env.rendered" >> "$GITHUB_OUTPUT"
+
+      - name: Copy files to target
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ needs.detect-env.outputs.ssh_host }}
+          host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          source: deploy/chatime.compose.yml,deploy/deploy.sh
+          source: docker-compose.yml,deploy/deploy.sh,.env.rendered
           target: /opt/chatime/
-          strip_components: 1
           overwrite: true
 
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         env:
-          INFISICAL_ENV: ${{ needs.detect-env.outputs.infisical_env }}
+          CHATIME_IMAGE: ghcr.io/${{ github.repository }}:main-${{ github.sha }}
         with:
-          host: ${{ needs.detect-env.outputs.ssh_host }}
+          host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          envs: INFISICAL_ENV
+          remote_dir: /opt/chatime
+          envs: |
+            CHATIME_IMAGE=ghcr.io/${{ github.repository }}:main-${{ github.sha }}
           script: |
             set -euo pipefail
-            chmod +x /opt/chatime/deploy.sh
-            # Render secrets from Infisical for this environment and pipe them
-            # into deploy.sh, which exports them for docker compose.
-            infisical secrets --env "$INFISICAL_ENV" \
-              --format=dotenv --silent > /tmp/chatime.env
-            set -a; . /tmp/chatime.env; set +a
-            rm -f /tmp/chatime.env
-            /opt/chatime/deploy.sh ${{ env.IMAGE_NAME }}:${{ needs.detect-env.outputs.tag }}-${{ github.sha }}
+            cd /opt/chatime
+            cp .env.rendered .env
+            chmod 600 .env
+            chmod +x /opt/chatime/deploy/deploy.sh
+            docker pull "$CHATIME_IMAGE"
+            docker compose up -d --no-build --remove-orphans
+            for i in $(seq 1 40); do
+              if [ "$(docker inspect --format '{{.State.Health.Status}}' chatime-app 2>/dev/null)" = "healthy" ]; then
+                echo "chatime-app healthy with $CHATIME_IMAGE"
+                docker image prune -f >/dev/null 2>&1 || true
+                exit 0
+              fi
+              sleep 3
+            done
+            echo "chatime-app did not become healthy" >&2
+            docker compose logs --tail 50 app >&2 || true
+            exit 1

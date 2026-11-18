@@ -1,0 +1,41 @@
+# Compose aplikasi: FE + BE dalam satu image (FE sudah di-build ke web/dist dan disajikan
+# oleh Fastify), jadi hanya ada satu container aplikasi.
+#
+#   docker compose up -d --build      # build & jalankan
+#   docker compose logs -f app        # lihat log
+#   docker compose down               # stop (data uploads tetap di volume)
+#
+# Database TIDAK di sini. Postgres dikelola terpisah di /srv/db-chatime (lihat README) dan
+# diakses lewat IP LAN server (lihat CHATIME_DATABASE_URL di .env).
+name: chatime
+
+services:
+  app:
+    build: .
+    image: ${CHATIME_IMAGE:-chatime:local}
+    container_name: chatime-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: 4001
+      NODE_ENV: production
+      # Postgres ada di /srv/db-chatime dan diakses lewat IP LAN server, mis.
+      # postgres://teamchat:teamchat@192.168.2.112:5434/team_chat
+      DATABASE_URL: ${CHATIME_DATABASE_URL}
+      UPLOAD_DIR: /app/server/uploads
+    ports:
+      - "${CHATIME_PORT:-4001}:4001"
+    volumes:
+      - chatime-uploads:/app/server/uploads
+    healthcheck:
+      # /api/health/ready ikut mengecek koneksi database, jadi DB mati/salah config
+      # langsung terlihat sebagai "unhealthy" (bukan hijau tapi error 500 saat dipakai).
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:4001/api/health/ready"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+volumes:
+  chatime-uploads:

@@ -144,8 +144,27 @@ the API in development; in production everything shares one origin.
 
 ## Database
 
-Postgres is **not** started by `npm run dev` — it is an independent service. The app only needs
-`DATABASE_URL`; any Postgres (system package, managed cloud instance, container) works.
+Postgres is **not** started by `npm run dev` — it is an independent service, and it is not part of
+the app's `docker-compose.yml` either. The app only needs a connection string; any Postgres (system
+package, managed cloud instance, container) works.
+
+### Postgres on this server (`/srv/db-chatime`)
+
+```bash
+cd /srv/db-chatime
+docker compose up -d          # postgres:17, host port 5434
+docker compose logs -f postgres
+```
+
+Layout: `docker-compose.yml`, `.env` (`POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`),
+`config/postgresql.conf` (`listen_addresses = '*'`), `config/pg_hba.conf` (`local … trust` +
+`host … scram-sha-256`) and `data/` (bind mount owned by uid 999). The container runs with
+`security_opt: label=disable` because Fedora's SELinux does not allow relabeling `/srv`.
+
+The app connects over the server's LAN IP, `postgres://teamchat:<password>@192.168.2.112:5434/team_chat`,
+set as `CHATIME_DATABASE_URL` in `.env` (and applied by the root `docker-compose.yml`). The same URL
+works from the host for `npm run dev`, Drizzle and `psql`, because Postgres listens on all interfaces
+on host port 5434. If the server's IP changes, update `DATABASE_URL` and `CHATIME_DATABASE_URL`.
 
 - Schema changes: edit `server/src/db/schema.ts`, regenerate `server/scripts/schema.sql` (see the header of that file) and apply it with `psql "$DATABASE_URL" -f server/scripts/schema.sql`.
 - `npm run db:push` is broken: `drizzle-kit` is pinned to `0.18`, which has no `push` command.
@@ -324,12 +343,26 @@ webhook's name (e.g. "Metabase"), in realtime and counted toward unread badges.
 
 ## Deployment
 
-Set `NODE_ENV=production`, a strong `JWT_SECRET`, real `VAPID_*` keys, `APP_URL`, and
-`DATABASE_URL`. Then:
+One compose file, one app container: the image contains both the API and the built SPA
+(`web/dist`), so FE and BE are served by the same Fastify process.
 
 ```bash
-npm ci && psql "$DATABASE_URL" -f server/scripts/schema.sql && npm run build && npm start
+cd /srv/db-chatime && docker compose up -d          # database (once)
+cd /home/devops/App-Internal/chatime
+docker compose up -d --build                        # API + SPA on host port 4001
+docker compose logs -f app
+curl -fsS localhost:4001/api/health/ready           # {"ok":true,"db":"up"}
 ```
+
+Set `NODE_ENV=production`, a strong `JWT_SECRET`, real `VAPID_*` keys, `APP_URL` and
+`CHATIME_DATABASE_URL` in `.env`. Postgres is deployed separately — see
+[Postgres on this server](#postgres-on-this-server-srvdb-chatime).
+
+CI (`.github/workflows/deploy.yml`) builds `ghcr.io/<repo>:prod|dev`, copies `docker-compose.yml`
+and `deploy/deploy.sh` to `/opt/chatime`, writes that environment's secrets from Infisical to
+`/opt/chatime/.env`, then runs `deploy.sh`, which pulls the image and runs
+`docker compose up -d --no-build`. Infisical must define `CHATIME_DATABASE_URL`, `JWT_SECRET`,
+`APP_URL`, `VAPID_*` and `UPLOAD_MAX_MB`.
 
 `npm start` serves the API and the built SPA (`web/dist`) from one process; unknown non-`/api` paths
 fall back to `index.html` for client-side routing.

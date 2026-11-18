@@ -69,6 +69,18 @@ export async function buildApp() {
 
   app.get('/api/health', async () => ({ ok: true }));
 
+  // Readiness: used by the container/compose healthcheck so a bad DATABASE_URL surfaces as
+  // "unhealthy" instead of a container that is green but cannot serve a single request.
+  app.get('/api/health/ready', async (req, reply) => {
+    try {
+      await db.execute(sql`select 1`);
+      return { ok: true, db: 'up' };
+    } catch (err) {
+      req.log.error({ err }, 'readiness check failed: database unreachable');
+      return reply.code(503).send({ ok: false, db: 'down' });
+    }
+  });
+
   // External platforms authenticate with the secret in the URL, so this stays outside the scoped auth.
   await app.register(webhookReceiverRoutes);
 

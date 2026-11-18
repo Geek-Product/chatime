@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+.github
+.qoder
+.env
+.env.*
+!.env.example
+server/uploads
+*.log
+*.tsbuildinfo
