@@ -160,7 +160,7 @@ jobs:
             if [ ! -d /opt/chatime/.git ]; then
               echo "Remote /opt/chatime is not a git repo - initializing..."
               rm -rf /opt/chatime.new
-              git clone --branch main origin /opt/chatime.new
+              git clone --branch main https://github.com/geek-product/chatime.git /opt/chatime.new
               mv /opt/chatime.new/* /opt/chatime/
               rmdir /opt/chatime.new
             else
