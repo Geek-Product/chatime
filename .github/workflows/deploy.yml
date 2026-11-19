@@ -148,12 +148,13 @@ jobs:
             -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             -o ConnectTimeout=10 -o BatchMode=yes)
 
-          export CHATIME_IMAGE="ghcr.io/geek-product/chatime:main-${{ github.sha }}"
-
-          echo "Pulling image ${CHATIME_IMAGE} into ${SSH_USER}@${SSH_HOST}:${TARGET}"
+          echo "Pulling image into ${SSH_USER}@${SSH_HOST}:${TARGET}"
           ssh "${ssh_opts[@]}" "${SSH_USER}@${SSH_HOST}" '
             set -euo pipefail
             cd /opt/chatime
+
+            # Definisi image DI DALAM remote shell (runner tidak mengirim env ini)
+            CHATIME_IMAGE="ghcr.io/geek-product/chatime:main-${{ github.sha }}"
 
             # .env.rendered dibuat di runner (dari secret), TIDAK ada di git.
             # Kirim via stdin ke remote, lalu salin ke .env
