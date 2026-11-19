@@ -118,6 +118,7 @@ function ProfileForm({ me }: { me: User }) {
   const { updateUser } = useAuth();
   const [displayName, setDisplayName] = useState(me.displayName);
   const [username, setUsername] = useState(me.username);
+  const [email, setEmail] = useState(me.email);
   const [title, setTitle] = useState(me.title ?? '');
   const [avatarColor, setAvatarColor] = useState(me.avatarColor);
   const [photo, setPhoto] = useState<string | null>(me.avatarUrl ?? null);
@@ -129,6 +130,7 @@ function ProfileForm({ me }: { me: User }) {
   const dirty =
     displayName.trim() !== me.displayName ||
     username !== me.username ||
+    email.trim().toLowerCase() !== me.email.toLowerCase() ||
     title.trim() !== (me.title ?? '') ||
     avatarColor !== me.avatarColor;
 
@@ -137,17 +139,20 @@ function ProfileForm({ me }: { me: User }) {
     setError(null);
     if (!/^[a-zA-Z0-9_.-]{2,32}$/.test(username)) return setError('Username: 2-32 letters, numbers, _ . -');
     if (!displayName.trim()) return setError('Display name cannot be empty');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError('Enter a valid email address');
     setBusy(true);
     try {
       const res = await api.patch<{ user: User }>('/auth/me', {
         displayName: displayName.trim(),
         username,
+        email: email.trim(),
         title: title.trim() || null,
         avatarColor,
       });
       updateUser({
         displayName: res.user.displayName,
         username: res.user.username,
+        email: res.user.email,
         title: res.user.title,
         avatarColor: res.user.avatarColor,
       });
@@ -215,6 +220,19 @@ function ProfileForm({ me }: { me: User }) {
           />
         </div>
         <span className="mt-1 block text-xs font-normal text-zinc-500">People mention you with @{username || 'username'}.</span>
+      </label>
+      <label className="block text-xs font-bold text-ink">
+        Email
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          maxLength={255}
+          required
+          autoComplete="email"
+          className={inputCls}
+        />
+        <span className="mt-1 block text-xs font-normal text-zinc-500">Used to sign in. Workspace admins can see it in member lists.</span>
       </label>
       <label className="block text-xs font-bold text-ink">
         Title

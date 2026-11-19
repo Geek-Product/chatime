@@ -11,7 +11,7 @@ interface AuthContextValue {
   register: (data: { email: string; username: string; displayName: string; password: string; message?: string }) => Promise<void>;
   logout: () => Promise<void>;
   setStatus: (status: 'approved' | 'pending' | 'declined') => void;
-  updateUser: (patch: Partial<Pick<User, 'username' | 'displayName' | 'avatarColor' | 'title' | 'avatarUrl'>>) => void;
+  updateUser: (patch: Partial<Pick<User, 'username' | 'displayName' | 'email' | 'avatarColor' | 'title' | 'avatarUrl'>>) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -55,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser((prev) => (prev ? { ...prev, status } : prev));
   }, []);
 
-  const updateUser = useCallback((patch: Partial<Pick<User, 'username' | 'displayName' | 'avatarColor' | 'title' | 'avatarUrl'>>) => {
+  const updateUser = useCallback((patch: Partial<Pick<User, 'username' | 'displayName' | 'email' | 'avatarColor' | 'title' | 'avatarUrl'>>) => {
     setUser((prev) => (prev ? { ...prev, ...patch } : prev));
   }, []);
 

@@ -148,6 +148,7 @@ export default async function authRoutes(app: FastifyInstance) {
     const body = z.object({
       displayName: z.string().trim().min(1).max(80).optional(),
       username: z.string().regex(/^[a-zA-Z0-9_.-]{2,32}$/, '2-32 chars: letters, numbers, _ . -').optional(),
+      email: z.string().trim().email().max(255).optional(),
       avatarColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Pick a valid color').optional(),
       title: z.string().trim().max(60).nullable().optional(),
       /** Attachment id from a prior POST /attachments, or null to remove the photo. */
@@ -172,11 +173,19 @@ export default async function authRoutes(app: FastifyInstance) {
         .where(sql`lower(${users.username}) = lower(${body.username})`);
       if (taken && taken.id !== me.id) throw conflict('That username is taken', 'ALREADY_EXISTS');
     }
+    if (body.email) {
+      const [taken] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(sql`lower(${users.email}) = lower(${body.email})`);
+      if (taken && taken.id !== me.id) throw conflict('That email is already in use', 'ALREADY_EXISTS');
+    }
     const [updated] = await db
       .update(users)
       .set({
         ...(body.displayName !== undefined ? { displayName: body.displayName } : {}),
         ...(body.username !== undefined ? { username: body.username } : {}),
+        ...(body.email !== undefined ? { email: body.email.toLowerCase() } : {}),
         ...(body.avatarColor !== undefined ? { avatarColor: body.avatarColor } : {}),
         ...(body.title !== undefined ? { title: body.title || null } : {}),
         ...(body.avatarAttachmentId !== undefined ? { avatarAttachmentId: body.avatarAttachmentId } : {}),
