@@ -130,6 +130,11 @@ jobs:
           SSH_USER="${{ secrets.SSH_USER }}"
           SSH_HOST="${{ secrets.SSH_HOST }}"
           SSH_PORT="${{ secrets.SSH_PORT || 22 }}"
+          SSH_KEY="${{ secrets.SSH_PRIVATE_KEY }}"
+          TARGET="/opt/chatime"
+
+          # Strip carriage returns (\r) yang sering ada di secret GitHub
+          SSH_KEY="${SSH_KEY//$'\r'/}"
 
           KEY_FILE="/tmp/chatime-deploy-key"
           printf '%s' "$SSH_KEY" > "$KEY_FILE"
@@ -141,7 +146,7 @@ jobs:
 
           export CHATIME_IMAGE="ghcr.io/geek-product/chatime:main-${{ github.sha }}"
 
-          echo "Pulling latest code into ${SSH_USER}@${SSH_HOST}:/opt/chatime via git pull"
+          echo "Pulling latest code into ${SSH_USER}@${SSH_HOST}:${TARGET} via git pull"
           ssh "${ssh_opts[@]}" "${SSH_USER}@${SSH_HOST}" '
             set -euo pipefail
             cd /opt/chatime
