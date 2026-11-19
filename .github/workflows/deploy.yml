@@ -46,11 +46,24 @@ jobs:
     steps:
       - name: Render .env from secrets
         id: env
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          CHATIME_DATABASE_URL: ${{ secrets.CHATIME_DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          UPLOAD_MAX_MB: ${{ secrets.UPLOAD_MAX_MB }}
+          CLIENT_ORIGIN: ${{ secrets.CLIENT_ORIGIN }}
         run: |
           set -euo pipefail
-          # Validate required secrets before rendering; an empty value fails the run.
-          required=(APP_URL DATABASE_URL CHATIME_DATABASE_URL JWT_SECRET \
-                    UPLOAD_MAX_MB)
+
+          required=(
+            APP_URL
+            DATABASE_URL
+            CHATIME_DATABASE_URL
+            JWT_SECRET
+            UPLOAD_MAX_MB
+          )
+
           for v in "${required[@]}"; do
             if [ -z "${!v:-}" ]; then
               echo "::error::Missing required secret: $v"
@@ -58,24 +71,24 @@ jobs:
             fi
           done
 
-          # Quoted heredoc delimiter keeps shell from re-expanding any $ in secrets.
-          cat > .env.rendered <<'EOF'
-          PORT=4001
-          CHATIME_PORT=4001
-          CLIENT_ORIGIN=${{ secrets.CLIENT_ORIGIN }}
-          APP_URL=${{ secrets.APP_URL }}
-          NODE_ENV=production
-          DATABASE_URL=${{ secrets.DATABASE_URL }}
-          CHATIME_DATABASE_URL=${{ secrets.CHATIME_DATABASE_URL }}
-          UPLOAD_DIR=server/uploads
-          UPLOAD_MAX_MB=${{ secrets.UPLOAD_MAX_MB }}
-          JWT_SECRET=${{ secrets.JWT_SECRET }}
-          ACCESS_TOKEN_TTL=15m
-          REFRESH_TOKEN_TTL_DAYS=30
-          VAPID_PUBLIC_KEY=${{ secrets.VAPID_PUBLIC_KEY }}
-          VAPID_PRIVATE_KEY=${{ secrets.VAPID_PRIVATE_KEY }}
-          VAPID_SUBJECT=${{ secrets.VAPID_SUBJECT }}
-          EOF
+          printf '%s\n' \
+            "PORT=4001" \
+            "CHATIME_PORT=4001" \
+            "CLIENT_ORIGIN=$CLIENT_ORIGIN" \
+            "APP_URL=$APP_URL" \
+            "NODE_ENV=production" \
+            "DATABASE_URL=$DATABASE_URL" \
+            "CHATIME_DATABASE_URL=$CHATIME_DATABASE_URL" \
+            "UPLOAD_DIR=server/uploads" \
+            "UPLOAD_MAX_MB=$UPLOAD_MAX_MB" \
+            "JWT_SECRET=$JWT_SECRET" \
+            "ACCESS_TOKEN_TTL=15m" \
+            "REFRESH_TOKEN_TTL_DAYS=30" \
+            "VAPID_PUBLIC_KEY=$VAPID_PUBLIC_KEY" \
+            "VAPID_PRIVATE_KEY=$VAPID_PRIVATE_KEY" \
+            "VAPID_SUBJECT=$VAPID_SUBJECT" \
+            > .env.rendered
+
           chmod 600 .env.rendered
           echo "env_file=.env.rendered" >> "$GITHUB_OUTPUT"
 
