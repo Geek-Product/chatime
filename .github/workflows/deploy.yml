@@ -93,49 +93,22 @@ jobs:
           echo "env_file=.env.rendered" >> "$GITHUB_OUTPUT"
 
       
-      - name: Diagnose deployment workspace
+      - name: Validate deploy files
         run: |
           set -euo pipefail
+          test -f docker-compose.yml
+          test -f deploy/deploy.sh
+          test -f .env.rendered
+          echo "Deploy files ready"
 
-          cd "$GITHUB_WORKSPACE"
-
-          echo "=== Workspace ==="
-          pwd
-
-          echo "=== Files ==="
-          ls -lah
-          ls -lah deploy/
-
-          echo "=== Validate files ==="
-          for file in docker-compose.yml deploy/deploy.sh .env.rendered; do
-            test -f "$file" || {
-              echo "::error::Missing file: $file"
-              exit 1
-            }
-            echo "FOUND: $file"
-          done
-
-          echo "=== Manual TAR test ==="
-          tar -czvf /tmp/chatime-test.tar.gz \
-            docker-compose.yml \
-            deploy/deploy.sh \
-            .env.rendered
-
-          echo "=== TAR contents ==="
-          tar -tzvf /tmp/chatime-test.tar.gz
-
-          echo "=== TAR size ==="
-          ls -lh /tmp/chatime-test.tar.gz
-
-      
       - name: Copy files to target
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          source: "./docker-compose.yml,./deploy/deploy.sh,./.env.rendered"
+          port: ${{ secrets.SSH_PORT || 22 }}
+          source: docker-compose.yml,deploy/deploy.sh,.env.rendered
           target: /opt/chatime/
           overwrite: true
           debug: true
