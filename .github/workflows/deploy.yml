@@ -157,12 +157,14 @@ jobs:
             set -euo pipefail
             cd /opt/chatime
 
-            if [ ! -d ./.git ]; then
+            if [ ! -d /opt/chatime/.git ]; then
               echo "Remote /opt/chatime is not a git repo - initializing..."
-              rm -rf /opt/chatime
-              git clone --branch main origin /opt/chatime
-              git checkout -B main
+              rm -rf /opt/chatime.new
+              git clone --branch main origin /opt/chatime.new
+              mv /opt/chatime.new/* /opt/chatime/
+              rmdir /opt/chatime.new
             else
+              # Kalau SUDAH ada git repo → hanya ambil commit terbaru
               git pull --ff-only origin main
             fi
 
