@@ -123,50 +123,49 @@ jobs:
           ssh "${ssh_opts[@]}" "${SSH_USER}@${SSH_HOST}" "echo SSH_OK; whoami; ls -la ${TARGET}"
           echo "SSH connection test passed"
 
-      - name: Copy files to target
+      - name: Deploy via git pull over SSH
         shell: bash
         run: |
           set -euo pipefail
           SSH_USER="${{ secrets.SSH_USER }}"
           SSH_HOST="${{ secrets.SSH_HOST }}"
           SSH_PORT="${{ secrets.SSH_PORT || 22 }}"
-          SSH_KEY="${{ secrets.SSH_PRIVATE_KEY }}"
-          TARGET="/opt/chatime"
 
           KEY_FILE="/tmp/chatime-deploy-key"
           printf '%s' "$SSH_KEY" > "$KEY_FILE"
           chmod 600 "$KEY_FILE"
 
-          ssh_opts=(-i "$KEY_FILE" -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+          ssh_opts=(-i "$KEY_FILE" -p "$SSH_PORT" \
+            -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            -o ConnectTimeout=10 -o BatchMode=yes)
 
-          echo "Syncing files to ${SSH_USER}@${SSH_HOST}:${TARGET} via rsync over SSH"
-          rsync "${ssh_opts[@]}" -avz \
-            docker-compose.yml deploy/deploy.sh .env.rendered \
-            "${SSH_USER}@${SSH_HOST}:${TARGET}"
+          export CHATIME_IMAGE="ghcr.io/geek-product/chatime:main-${{ github.sha }}"
 
-          echo "Files synced. Listing target:"
-          ssh "${ssh_opts[@]}" "${SSH_USER}@${SSH_HOST}" "ls -la ${TARGET}"
-
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.2.0
-        env:
-          CHATIME_IMAGE: ghcr.io/geek-product/chatime:main-${{ github.sha }}
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT || 22 }}
-          envs: CHATIME_IMAGE
-          script: |
+          echo "Pulling latest code into ${SSH_USER}@${SSH_HOST}:/opt/chatime via git pull"
+          ssh "${ssh_opts[@]}" "${SSH_USER}@${SSH_HOST}" '
             set -euo pipefail
             cd /opt/chatime
+
+            if [ ! -d ./.git ]; then
+              echo "Remote /opt/chatime is not a git repo - initializing..."
+              rm -rf /opt/chatime
+              git clone --branch main origin /opt/chatime
+              git checkout -B main
+            else
+              git pull --ff-only origin main
+            fi
+
+            # Inject rendered env (secrets are NOT committed to the repo)
             cp .env.rendered .env
             chmod 600 .env
-            chmod +x /opt/chatime/deploy/deploy.sh
+
+            chmod +x deploy/deploy.sh
+
             docker pull "$CHATIME_IMAGE"
             docker compose up -d --no-build --remove-orphans
+
             for i in $(seq 1 40); do
-              if [ "$(docker inspect --format '{{.State.Health.Status}}' chatime-app 2>/dev/null)" = "healthy" ]; then
+              if [ "$(docker inspect --format "{{.State.Health.Status}}" chatime-app 2>/dev/null)" = "healthy" ]; then
                 echo "chatime-app healthy with $CHATIME_IMAGE"
                 docker image prune -f >/dev/null 2>&1 || true
                 exit 0
@@ -176,3 +175,4 @@ jobs:
             echo "chatime-app did not become healthy" >&2
             docker compose logs --tail 50 app >&2 || true
             exit 1
+          '
