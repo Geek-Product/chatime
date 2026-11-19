@@ -92,6 +92,28 @@ jobs:
           echo "env_file=.env.rendered" >> "$GITHUB_OUTPUT"
 
       
+      - name: Test SSH connection
+        shell: bash
+        run: |
+          set -euo pipefail
+          SSH_USER="${{ secrets.SSH_USER }}"
+          SSH_HOST="${{ secrets.SSH_HOST }}"
+          SSH_PORT="${{ secrets.SSH_PORT || 22 }}"
+          SSH_KEY="${{ secrets.SSH_PRIVATE_KEY }}"
+          TARGET="/opt/chatime"
+
+          KEY_FILE="/tmp/chatime-deploy-key"
+          printf '%s' "$SSH_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+
+          ssh_opts=(-i "$KEY_FILE" -p "$SSH_PORT" \
+            -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            -o ConnectTimeout=10 -o BatchMode=yes)
+
+          echo "Testing SSH to ${SSH_USER}@${SSH_HOST}:${SSH_PORT}"
+          ssh "${ssh_opts[@]}" "${SSH_USER}@${SSH_HOST}" "echo SSH_OK; whoami; ls -la ${TARGET}"
+          echo "SSH connection test passed"
+
       - name: Copy files to target
         shell: bash
         run: |
@@ -102,7 +124,6 @@ jobs:
           SSH_KEY="${{ secrets.SSH_PRIVATE_KEY }}"
           TARGET="/opt/chatime"
 
-          # rsync -i butuh path file, bukan isi key. Tulis key ke temp file dulu
           KEY_FILE="/tmp/chatime-deploy-key"
           printf '%s' "$SSH_KEY" > "$KEY_FILE"
           chmod 600 "$KEY_FILE"
