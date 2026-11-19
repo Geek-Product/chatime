@@ -132,16 +132,24 @@ jobs:
           tar -tzvf /tmp/chatime-test.tar.gz
 
       - name: Copy files to target
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT || 22 }}
-          source: docker-compose.yml,deploy/deploy.sh,.env.rendered
-          target: /opt/chatime/
-          overwrite: true
-          debug: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          SSH_USER="${{ secrets.SSH_USER }}"
+          SSH_HOST="${{ secrets.SSH_HOST }}"
+          SSH_PORT="${{ secrets.SSH_PORT || 22 }}"
+          SSH_KEY="${{ secrets.SSH_PRIVATE_KEY }}"
+          TARGET="/opt/chatime"
+
+          ssh_opts=(-i "$SSH_KEY" -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+
+          echo "Syncing files to ${SSH_USER}@${SSH_HOST}:${TARGET} via rsync over SSH"
+          rsync "${ssh_opts[@]}" -avz \
+            docker-compose.yml deploy/deploy.sh .env.rendered \
+            "${SSH_USER}@${SSH_HOST}:${TARGET}"
+
+          echo "Files synced. Listing target:"
+          ssh "${ssh_opts[@]}" "${SSH_USER}@${SSH_HOST}" "ls -la ${TARGET}"
 
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
