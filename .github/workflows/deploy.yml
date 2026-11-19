@@ -143,9 +143,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          remote_dir: /opt/chatime
-          envs: |
-            CHATIME_IMAGE=ghcr.io/geek-product/chatime:main-${{ github.sha }}
+          envs: CHATIME_IMAGE
           script: |
             set -euo pipefail
             cd /opt/chatime
