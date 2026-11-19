@@ -92,16 +92,47 @@ jobs:
           chmod 600 .env.rendered
           echo "env_file=.env.rendered" >> "$GITHUB_OUTPUT"
 
+      
+      - name: Diagnose deployment workspace
+        run: |
+          set -euo pipefail
+
+          echo "=== Workspace ==="
+          pwd
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+
+          echo "=== Root files ==="
+          ls -lah
+
+          echo "=== Deploy directory ==="
+          ls -lah deploy/
+
+          echo "=== Required files ==="
+          for file in \
+            docker-compose.yml \
+            deploy/deploy.sh \
+            .env.rendered
+          do
+            if [ ! -f "$file" ]; then
+              echo "::error::Missing file: $file"
+              exit 1
+            fi
+
+            echo "OK: $file"
+          done
+
+      
       - name: Copy files to target
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT || 22 }}
-          source: docker-compose.yml,deploy/deploy.sh,.env.rendered
+          port: 22
+          source: "./docker-compose.yml,./deploy/deploy.sh,./.env.rendered"
           target: /opt/chatime/
           overwrite: true
+          debug: true
 
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
