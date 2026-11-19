@@ -123,7 +123,7 @@ jobs:
           ssh "${ssh_opts[@]}" "${SSH_USER}@${SSH_HOST}" "echo SSH_OK; whoami; ls -la ${TARGET}"
           echo "SSH connection test passed"
 
-      - name: Deploy via git pull over SSH
+      - name: Deploy via GHCR image pull over SSH
         shell: bash
         run: |
           set -euo pipefail
@@ -150,28 +150,21 @@ jobs:
 
           export CHATIME_IMAGE="ghcr.io/geek-product/chatime:main-${{ github.sha }}"
 
-          echo "Pulling latest code into ${SSH_USER}@${SSH_HOST}:${TARGET}"
+          echo "Pulling image ${CHATIME_IMAGE} into ${SSH_USER}@${SSH_HOST}:${TARGET}"
           ssh "${ssh_opts[@]}" "${SSH_USER}@${SSH_HOST}" '
             set -euo pipefail
             cd /opt/chatime
 
-            # Inisialisasi repo HANYA jika belum ada (.git tidak ada)
-            if [ ! -d ./.git ]; then
-              echo "Remote /opt/chatime belum jadi git repo - menginisialisasi..."
-              git init
-              git remote add origin https://github.com/geek-product/chatime.git
-            fi
-
-            # Ambil + update ke commit terbaru (jalan setiap deploy)
-            git fetch origin
-            git reset --hard origin/main
-
-            # Inject rendered env (secrets NOT committed to repo)
+            # .env.rendered dibuat di runner (dari secret), TIDAK ada di git.
+            # Kirim via stdin ke remote, lalu salin ke .env
+            cat > .env.rendered
             cp .env.rendered .env
             chmod 600 .env
 
-            # Deploy
+            # Pull image baru dari GHCR
             docker pull "$CHATIME_IMAGE"
+
+            # Restart service dengan image + env terbaru
             docker compose up -d --no-build --remove-orphans
 
             for i in $(seq 1 40); do
@@ -185,4 +178,4 @@ jobs:
             echo "chatime-app did not become healthy" >&2
             docker compose logs --tail 50 app >&2 || true
             exit 1
-          '
+          ' < .env.rendered
