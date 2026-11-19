@@ -44,6 +44,9 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     environment: prod
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Render .env from secrets
         id: env
         env:
