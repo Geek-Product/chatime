@@ -92,45 +92,6 @@ jobs:
           echo "env_file=.env.rendered" >> "$GITHUB_OUTPUT"
 
       
-      - name: Validate deploy files
-        run: |
-          set -euo pipefail
-          test -f docker-compose.yml
-          test -f deploy/deploy.sh
-          test -f .env.rendered
-          echo "Deploy files ready"
-
-      - name: Debug SCP source
-        shell: bash
-        run: |
-          set -euxo pipefail
-
-          echo "WORKSPACE=$GITHUB_WORKSPACE"
-          cd "$GITHUB_WORKSPACE"
-
-          echo "=== Current directory ==="
-          pwd
-
-          echo "=== File listing ==="
-          ls -lah
-          ls -lah deploy/
-
-          echo "=== Absolute paths ==="
-          realpath docker-compose.yml
-          realpath deploy/deploy.sh
-          realpath .env.rendered
-
-          echo "=== File sizes ==="
-          du -h docker-compose.yml deploy/deploy.sh .env.rendered
-
-          echo "=== TAR test ==="
-          tar -czvf /tmp/chatime-test.tar.gz \
-            docker-compose.yml \
-            deploy/deploy.sh \
-            .env.rendered
-
-          tar -tzvf /tmp/chatime-test.tar.gz
-
       - name: Copy files to target
         shell: bash
         run: |
@@ -141,7 +102,12 @@ jobs:
           SSH_KEY="${{ secrets.SSH_PRIVATE_KEY }}"
           TARGET="/opt/chatime"
 
-          ssh_opts=(-i "$SSH_KEY" -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+          # rsync -i butuh path file, bukan isi key. Tulis key ke temp file dulu
+          KEY_FILE="/tmp/chatime-deploy-key"
+          printf '%s' "$SSH_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+
+          ssh_opts=(-i "$KEY_FILE" -p "$SSH_PORT" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
 
           echo "Syncing files to ${SSH_USER}@${SSH_HOST}:${TARGET} via rsync over SSH"
           rsync "${ssh_opts[@]}" -avz \
