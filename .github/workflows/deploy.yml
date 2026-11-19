@@ -153,19 +153,16 @@ jobs:
             set -euo pipefail
             cd /opt/chatime
 
-            # Definisi image DI DALAM remote shell (runner tidak mengirim env ini)
             CHATIME_IMAGE="ghcr.io/geek-product/chatime:main-${{ github.sha }}"
 
-            # .env.rendered dibuat di runner (dari secret), TIDAK ada di git.
-            # Kirim via stdin ke remote, lalu salin ke .env
             cat > .env.rendered
             cp .env.rendered .env
             chmod 600 .env
 
-            # Pull image baru dari GHCR
-            docker pull "$CHATIME_IMAGE"
+            # Login ke GHCR di remote (runner tidak punya sesi login di remote)
+            docker login ghcr.io -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}"
 
-            # Restart service dengan image + env terbaru
+            docker pull "$CHATIME_IMAGE"
             docker compose up -d --no-build --remove-orphans
 
             for i in $(seq 1 40); do
