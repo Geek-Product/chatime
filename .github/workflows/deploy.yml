@@ -97,29 +97,35 @@ jobs:
         run: |
           set -euo pipefail
 
+          cd "$GITHUB_WORKSPACE"
+
           echo "=== Workspace ==="
           pwd
-          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
 
-          echo "=== Root files ==="
+          echo "=== Files ==="
           ls -lah
-
-          echo "=== Deploy directory ==="
           ls -lah deploy/
 
-          echo "=== Required files ==="
-          for file in \
+          echo "=== Validate files ==="
+          for file in docker-compose.yml deploy/deploy.sh .env.rendered; do
+            test -f "$file" || {
+              echo "::error::Missing file: $file"
+              exit 1
+            }
+            echo "FOUND: $file"
+          done
+
+          echo "=== Manual TAR test ==="
+          tar -czvf /tmp/chatime-test.tar.gz \
             docker-compose.yml \
             deploy/deploy.sh \
             .env.rendered
-          do
-            if [ ! -f "$file" ]; then
-              echo "::error::Missing file: $file"
-              exit 1
-            fi
 
-            echo "OK: $file"
-          done
+          echo "=== TAR contents ==="
+          tar -tzvf /tmp/chatime-test.tar.gz
+
+          echo "=== TAR size ==="
+          ls -lh /tmp/chatime-test.tar.gz
 
       
       - name: Copy files to target
