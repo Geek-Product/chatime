@@ -166,7 +166,7 @@ jobs:
 
           # Eksekusi logika deploy yang sudah terpusat di deploy.sh (sangat singkat)
           ssh "${ssh_opts[@]}" "${SSH_USER}@${SSH_HOST}" \
-            "CHATIME_DIR=/opt/chatime CHATIME_IMAGE='$CHATIME_IMAGE' /opt/chatime/deploy/deploy.sh"
+            "CHATIME_DIR=/opt/chatime /opt/chatime/deploy/deploy.sh '$CHATIME_IMAGE'"
 
       - name: Cleanup SSH key
         if: always()
