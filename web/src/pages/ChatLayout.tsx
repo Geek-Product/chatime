@@ -12,6 +12,7 @@ import { SettingsModal } from '../components/SettingsModal';
 import { EditChannelModal } from '../components/EditChannelModal';
 import { UserProfileCard } from '../components/UserProfileCard';
 import { Avatar } from '../components/Avatar';
+import { OfflineBanner } from '../components/OfflineBanner';
 import MentionsView from './MentionsView';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
@@ -754,6 +755,7 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
         />
       )}
       <UserProfileCard />
+      <OfflineBanner />
     </div>
   );
 }

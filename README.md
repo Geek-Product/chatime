@@ -15,6 +15,7 @@ with unread badges and browser (Web Push) notifications.
 | **Files** | `@fastify/multipart` uploads to disk, permission-checked downloads |
 | **Push** | `web-push` with VAPID keys + a service worker |
 | **Frontend** | React 19, Vite, TypeScript, Tailwind CSS v4 |
+| **PWA** | Manifest + icons in `pwa/`, a hand-written service worker (app shell + offline API cache), and an install-prompt helper |
 | **Client data** | TanStack Query, React Router 7, sonner (toasts), lucide-react (icons) |
 | **Tooling** | npm workspaces, `tsx` (dev runner), `concurrently` |
 
@@ -48,6 +49,13 @@ names and titles and renames the old `alice`/`bob`/`carol` demo accounts in plac
 team-chat/
 ├── package.json              # npm workspaces (server, web) + top-level scripts
 ├── .env.example              # all configuration, documented
+│
+├── pwa/                      # installable-app assets shared by the web build
+│   ├── manifest.webmanifest
+│   ├── sw.js                 # app shell/offline cache + Web Push
+│   ├── install.ts            # beforeinstallprompt store used by the Install button
+│   ├── generate-icons.py     # regenerates the PNG icons (Pillow)
+│   └── icons/                # PNG/SVG app icons
 │
 ├── server/                   # Fastify API + WebSocket
 │   ├── env.ts                # Zod-validated process.env (loaded from ../.env)
@@ -83,8 +91,8 @@ team-chat/
 │   └── uploads/              # attachment storage (gitignored; path = UPLOAD_DIR)
 │
 └── web/                      # React single-page app
-    ├── vite.config.ts        # dev server :5173, proxies /api → :4000
-    ├── public/sw.js          # service worker (Web Push)
+    ├── vite.config.ts        # dev server :5173, proxies /api → :4001, serves/copies pwa/
+    ├── public/               # gifs and stickers
     └── src/
         ├── main.tsx          # providers: Query, Auth, Router, Theme, Profile
         ├── App.tsx           # routes: /login, /welcome, /w/:wsId/(c|d)/:id, /mentions
@@ -100,6 +108,7 @@ team-chat/
             ├── socket.ts     # WebSocket client (API origin in dev, same origin in prod)
             ├── useRealtime.tsx + usePresence / useAccessSocket
             ├── auth-context.tsx, profile.tsx, theme.tsx, profile-settings.ts
+            ├── offline.ts   # persisted query cache + cached-account fallback
             ├── push.ts, sound.ts, presence.ts
             ├── types.ts      # shared client-side types
             └── useDismiss.ts
@@ -117,7 +126,7 @@ Run from the repository root.
 | `npm run db:seed` | Create demo users, workspace "Acme", channels |
 | `npm run gen:vapid` | Generate Web Push keys into `.env` |
 | `npm run typecheck` | TypeScript check for web and server |
-| `npm run build` | Build the web app to `web/dist` |
+| `npm run build` | Build the web app to `web/dist` (including the PWA manifest, icons and service worker) |
 | `npm start` | Serve API + built web app from a single process |
 
 ## Configuration
@@ -291,6 +300,20 @@ previews, and the same realtime behaviour as channels. Threads are channel-only.
   `localhost`.
 - **Sound**: chime per incoming message (triple chime for mentions); toggle under Preferences →
   Message sounds. Stored per browser (`tc.sound`); the first click/keypress arms audio.
+
+### PWA and offline
+
+- Installable from Chrome/Edge (desktop and Android) through `pwa/manifest.webmanifest` and the service
+  worker; the sidebar shows **Install app** once the browser offers the prompt. iOS uses Safari's
+  *Share → Add to Home Screen*. Requires HTTPS (or `localhost`).
+- The worker caches the app shell (HTML, JS, CSS, icons, emoji/sticker assets) and the last-viewed
+  channels, DMs, threads, members, unread counts and mentions. TanStack Query mirrors the same
+  snapshots to localStorage, so a reload while offline still renders recent conversations with an
+  "Offline — showing saved messages" indicator.
+- Sending messages and presence need a live connection; the WebSocket and access-token refresh
+  resume automatically when the network returns.
+- Offline data is scoped to the signed-in account: the API cache and the persisted query snapshot
+  are cleared on sign-out and before applying a new login/registration on that browser.
 
 ### Profiles and appearance
 

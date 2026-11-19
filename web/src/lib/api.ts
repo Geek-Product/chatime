@@ -14,6 +14,35 @@ interface TokenState {
 const token: TokenState = { accessToken: null, onRefreshed: () => {} };
 let refreshing: Promise<string | null> | null = null;
 let tokenExpiresAt = 0;
+let lastRefreshFailure: 'network' | 'server' | 'auth' | null = null;
+
+const SESSION_USER_KEY = 'tc.session.user.v1';
+
+function readCachedUser(): User | null {
+  try {
+    const raw = localStorage.getItem(SESSION_USER_KEY);
+    return raw ? (JSON.parse(raw) as User) : null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberUser(user: User) {
+  try {
+    localStorage.setItem(SESSION_USER_KEY, JSON.stringify(user));
+  } catch {
+    // Storage can be unavailable (private mode); offline sign-in simply won't work there.
+  }
+}
+
+/** Drops the cached account so another login on this browser cannot see offline data. */
+function forgetCachedUser() {
+  try {
+    localStorage.removeItem(SESSION_USER_KEY);
+  } catch {
+    // ignore
+  }
+}
 
 export const setAccessToken = (t: string | null) => {
   token.accessToken = t;
@@ -26,6 +55,7 @@ export const accessTokenExpiringSoon = () => tokenExpiresAt === 0 || Date.now() 
 export function applySession(res: AuthResponse) {
   token.accessToken = res.accessToken;
   tokenExpiresAt = Date.now() + res.expiresIn * 1000;
+  rememberUser(res.user);
 }
 
 /**
@@ -54,15 +84,24 @@ export function refreshedUser() {
 async function refresh(): Promise<string | null> {
   refreshing ??= fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' })
     .then(async (r) => {
-      if (!r.ok) return null;
+      if (!r.ok) {
+        // 401/403 means the session is really gone; 5xx means the server is just unavailable.
+        lastRefreshFailure = r.status >= 500 ? 'server' : 'auth';
+        return null;
+      }
       const data = (await r.json()) as { accessToken: string; expiresIn: number; user?: User };
       token.accessToken = data.accessToken;
       tokenExpiresAt = Date.now() + data.expiresIn * 1000;
       lastRefreshedUser = data.user ?? null;
+      lastRefreshFailure = null;
+      if (data.user) rememberUser(data.user);
       token.onRefreshed();
       return data.accessToken;
     })
-    .catch(() => null)
+    .catch(() => {
+      lastRefreshFailure = 'network';
+      return null;
+    })
     .finally(() => {
       refreshing = null;
     });
@@ -77,9 +116,26 @@ export interface AuthResponse {
 
 export async function bootstrapSession(): Promise<AuthResponse | null> {
   const accessToken = await refresh();
-  if (!accessToken) return null;
-  const me = await request<{ user: AuthResponse['user'] }>('/auth/me');
-  return { accessToken, expiresIn: Math.max(0, Math.round((tokenExpiresAt - Date.now()) / 1000)), user: me.user };
+  const expiresIn = Math.max(0, Math.round((tokenExpiresAt - Date.now()) / 1000));
+  if (!accessToken) {
+    // Offline or a server outage is not a sign-out: reuse the last account so cached chats
+    // stay readable. A real 401/403 from refresh still lands on the login screen.
+    if (lastRefreshFailure !== 'auth') {
+      const cached = readCachedUser();
+      if (cached) return { accessToken: '', expiresIn: 0, user: cached };
+    }
+    return null;
+  }
+  try {
+    const me = await request<{ user: AuthResponse['user'] }>('/auth/me');
+    rememberUser(me.user);
+    return { accessToken, expiresIn, user: me.user };
+  } catch (error) {
+    const cached = readCachedUser();
+    const unavailable = error instanceof TypeError || (error instanceof ApiError && error.status >= 500);
+    if (cached && unavailable) return { accessToken, expiresIn, user: cached };
+    return null;
+  }
 }
 
 async function rawRequest(path: string, init: RequestInit): Promise<Response> {
@@ -195,6 +251,12 @@ export async function fetchAttachmentText(url: string) {
 }
 
 export async function logout() {
-  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-  token.accessToken = null;
+  try {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+  } finally {
+    // Signing out must work offline too, so local state is dropped even if the request failed.
+    token.accessToken = null;
+    lastRefreshedUser = null;
+    forgetCachedUser();
+  }
 }

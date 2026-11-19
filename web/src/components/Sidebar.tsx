@@ -5,6 +5,7 @@ import { AtSign, ChevronDown, Hash, Lock, Pencil, Plus, Settings, UserPlus, X, U
 import clsx from 'clsx';
 import { toast } from 'sonner';
 import { Avatar } from './Avatar';
+import { InstallAppButton } from './InstallApp';
 import { MemberPicker } from './MemberPicker';
 import { SignupsDialog, usePendingSignups } from './SignupsDialog';
 import { api } from '../lib/api';
@@ -846,6 +847,8 @@ export function Sidebar({
       {showSignups && (
         <SignupsDialog workspaceId={workspace.id} workspaceName={workspace.name} onClose={() => setShowSignups(false)} />
       )}
+
+      <InstallAppButton />
 
       <button
         type="button"

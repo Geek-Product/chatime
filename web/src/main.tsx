@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import App from './App';
 import { AuthProvider } from './lib/auth-context';
+import { restoreOfflineCache, syncOfflineCache } from './lib/offline';
 import { registerServiceWorker } from './lib/push';
 import { ProfileProvider } from './lib/profile';
 import { ThemeProvider } from './lib/theme';
@@ -15,6 +16,8 @@ const queryClient = new QueryClient({
     queries: { staleTime: 10_000, retry: 1, refetchOnWindowFocus: false },
   },
 });
+restoreOfflineCache(queryClient);
+syncOfflineCache(queryClient);
 
 // After first install the page has no controller until the next load, which hid push errors behind a hang.
 navigator.serviceWorker?.addEventListener('controllerchange', () => {
