@@ -11,13 +11,13 @@ concurrency:
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
   build-push:
     runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
-
       - uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
@@ -33,8 +33,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:main-${{ github.sha }}
-            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/geek-product/chatime:main-${{ github.sha }}
+            ghcr.io/geek-product/chatime:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -43,7 +43,8 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     environment: prod
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Render .env from secrets
         id: env
@@ -52,14 +53,19 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           CHATIME_DATABASE_URL: ${{ secrets.CHATIME_DATABASE_URL }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
-          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           UPLOAD_MAX_MB: ${{ secrets.UPLOAD_MAX_MB }}
+          CLIENT_ORIGIN: ${{ secrets.CLIENT_ORIGIN }}
         run: |
           set -euo pipefail
-          # Validate required secrets before rendering; an empty value fails the run.
-          required=(APP_URL DATABASE_URL CHATIME_DATABASE_URL JWT_SECRET \
-                     VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY UPLOAD_MAX_MB)
+
+          required=(
+            APP_URL
+            DATABASE_URL
+            CHATIME_DATABASE_URL
+            JWT_SECRET
+            UPLOAD_MAX_MB
+          )
+
           for v in "${required[@]}"; do
             if [ -z "${!v:-}" ]; then
               echo "::error::Missing required secret: $v"
@@ -67,26 +73,63 @@ jobs:
             fi
           done
 
-          # Quoted heredoc delimiter keeps shell from re-expanding any $ in secrets.
-          cat > .env.rendered <<'EOF'
-          PORT=4001
-          CHATIME_PORT=4001
-          CLIENT_ORIGIN=${{ secrets.CLIENT_ORIGIN }}
-          APP_URL=${{ secrets.APP_URL }}
-          NODE_ENV=production
-          DATABASE_URL=${{ secrets.DATABASE_URL }}
-          CHATIME_DATABASE_URL=${{ secrets.CHATIME_DATABASE_URL }}
-          UPLOAD_DIR=server/uploads
-          UPLOAD_MAX_MB=${{ secrets.UPLOAD_MAX_MB }}
-          JWT_SECRET=${{ secrets.JWT_SECRET }}
-          ACCESS_TOKEN_TTL=15m
-          REFRESH_TOKEN_TTL_DAYS=30
-          VAPID_PUBLIC_KEY=${{ secrets.VAPID_PUBLIC_KEY }}
-          VAPID_PRIVATE_KEY=${{ secrets.VAPID_PRIVATE_KEY }}
-          VAPID_SUBJECT=${{ secrets.VAPID_SUBJECT }}
-          EOF
+          printf '%s\n' \
+            "PORT=4001" \
+            "CHATIME_PORT=4001" \
+            "CLIENT_ORIGIN=$CLIENT_ORIGIN" \
+            "APP_URL=$APP_URL" \
+            "NODE_ENV=production" \
+            "DATABASE_URL=$DATABASE_URL" \
+            "CHATIME_DATABASE_URL=$CHATIME_DATABASE_URL" \
+            "UPLOAD_DIR=server/uploads" \
+            "UPLOAD_MAX_MB=$UPLOAD_MAX_MB" \
+            "JWT_SECRET=$JWT_SECRET" \
+            "ACCESS_TOKEN_TTL=15m" \
+            "REFRESH_TOKEN_TTL_DAYS=30" \
+            > .env.rendered
+
           chmod 600 .env.rendered
           echo "env_file=.env.rendered" >> "$GITHUB_OUTPUT"
+
+      
+      - name: Validate deploy files
+        run: |
+          set -euo pipefail
+          test -f docker-compose.yml
+          test -f deploy/deploy.sh
+          test -f .env.rendered
+          echo "Deploy files ready"
+
+      - name: Debug SCP source
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          echo "WORKSPACE=$GITHUB_WORKSPACE"
+          cd "$GITHUB_WORKSPACE"
+
+          echo "=== Current directory ==="
+          pwd
+
+          echo "=== File listing ==="
+          ls -lah
+          ls -lah deploy/
+
+          echo "=== Absolute paths ==="
+          realpath docker-compose.yml
+          realpath deploy/deploy.sh
+          realpath .env.rendered
+
+          echo "=== File sizes ==="
+          du -h docker-compose.yml deploy/deploy.sh .env.rendered
+
+          echo "=== TAR test ==="
+          tar -czvf /tmp/chatime-test.tar.gz \
+            docker-compose.yml \
+            deploy/deploy.sh \
+            .env.rendered
+
+          tar -tzvf /tmp/chatime-test.tar.gz
 
       - name: Copy files to target
         uses: appleboy/scp-action@v0.1.7
@@ -98,19 +141,18 @@ jobs:
           source: docker-compose.yml,deploy/deploy.sh,.env.rendered
           target: /opt/chatime/
           overwrite: true
+          debug: true
 
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         env:
-          CHATIME_IMAGE: ghcr.io/${{ github.repository }}:main-${{ github.sha }}
+          CHATIME_IMAGE: ghcr.io/geek-product/chatime:main-${{ github.sha }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          remote_dir: /opt/chatime
-          envs: |
-            CHATIME_IMAGE=ghcr.io/${{ github.repository }}:main-${{ github.sha }}
+          envs: CHATIME_IMAGE
           script: |
             set -euo pipefail
             cd /opt/chatime
