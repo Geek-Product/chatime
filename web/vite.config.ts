@@ -56,8 +56,11 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), pwaAssets()],
   server: {
     port: 5173,
+    // Tunneled dev hosts (e.g. *.trycloudflare.com) are random, so accept any Host header.
+    allowedHosts: true,
     proxy: {
-      '/api': { target: api, changeOrigin: true },
+      // The realtime socket shares the API prefix, so the proxy must upgrade WS too.
+      '/api': { target: api, changeOrigin: true, ws: true },
     },
   },
 });

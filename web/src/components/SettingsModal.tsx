@@ -72,7 +72,7 @@ function PasswordForm() {
           required
         />
       </label>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <label className="block text-xs font-bold text-ink">
           New password
           <input
@@ -358,44 +358,44 @@ export function SettingsModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[2px]" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-[2px]" onMouseDown={onClose}>
       <div
         onMouseDown={(e) => e.stopPropagation()}
-        className="flex w-full max-w-2xl overflow-hidden rounded-xl border border-zinc-300 bg-white text-ink shadow-2xl"
+        className="flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-zinc-300 bg-white text-ink shadow-2xl md:flex-row"
         role="dialog"
         aria-label="Preferences"
       >
-        <div className="flex w-44 shrink-0 flex-col gap-0.5 border-r border-line bg-panel p-2 text-sm">
+        <div className="flex shrink-0 gap-0.5 overflow-x-auto border-b border-line bg-panel p-2 text-sm md:w-44 md:flex-col md:border-r md:border-b-0">
           <button
             type="button"
             onClick={() => setTab('preferences')}
-            className={`flex items-center gap-2 rounded px-2 py-1.5 text-left font-semibold ${tab === 'preferences' ? 'bg-white text-ink shadow-sm' : 'text-zinc-600 hover:bg-hover'}`}
+            className={`flex shrink-0 items-center gap-2 rounded px-2 py-1.5 text-left font-semibold ${tab === 'preferences' ? 'bg-white text-ink shadow-sm' : 'text-zinc-600 hover:bg-hover'}`}
           >
             <BellRing size={14} /> Preferences
           </button>
           <button
             type="button"
             onClick={() => setTab('profile')}
-            className={`flex items-center gap-2 rounded px-2 py-1.5 text-left font-semibold ${tab === 'profile' ? 'bg-white text-ink shadow-sm' : 'text-zinc-600 hover:bg-hover'}`}
+            className={`flex shrink-0 items-center gap-2 rounded px-2 py-1.5 text-left font-semibold ${tab === 'profile' ? 'bg-white text-ink shadow-sm' : 'text-zinc-600 hover:bg-hover'}`}
           >
             <UserRound size={14} /> Profile
           </button>
           <button
             type="button"
             onClick={() => setTab('account')}
-            className={`flex items-center gap-2 rounded px-2 py-1.5 text-left font-semibold ${tab === 'account' ? 'bg-white text-ink shadow-sm' : 'text-zinc-600 hover:bg-hover'}`}
+            className={`flex shrink-0 items-center gap-2 rounded px-2 py-1.5 text-left font-semibold ${tab === 'account' ? 'bg-white text-ink shadow-sm' : 'text-zinc-600 hover:bg-hover'}`}
           >
             <KeyRound size={14} /> Password
           </button>
         </div>
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 overflow-y-auto">
           <div className="flex items-center justify-between border-b border-line px-5 py-4">
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-3">
               <Avatar name={me.displayName} color={me.avatarColor} photo={me.avatarUrl} size={40} />
-              <div>
-                <p className="font-bold leading-tight">{me.displayName}</p>
-                <p className="text-sm text-zinc-600">@{me.username} · {me.email}</p>
+              <div className="min-w-0">
+                <p className="truncate font-bold leading-tight">{me.displayName}</p>
+                <p className="truncate text-sm text-zinc-600">@{me.username} · {me.email}</p>
               </div>
             </div>
             <button type="button" onClick={onClose} className="rounded p-1 text-zinc-600 hover:bg-hover hover:text-ink" aria-label="Close preferences">
@@ -433,7 +433,7 @@ export function SettingsModal({
                     <Palette size={16} /> Sidebar color
                   </p>
                   <p className="mt-1 text-sm text-zinc-600">Pick a theme for the sidebar. Saved in this browser.</p>
-                  <div className="mt-3 grid grid-cols-4 gap-2">
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                     {(Object.keys(THEMES) as ThemeName[]).map((name) => {
                       const t = THEMES[name];
                       const active = theme.theme === name;

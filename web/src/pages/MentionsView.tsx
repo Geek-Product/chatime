@@ -20,16 +20,16 @@ export default function MentionsView({
 
   return (
     <div className="flex-1 overflow-y-auto bg-panel">
-      <div className="border-b border-line bg-white px-8 pt-10 pb-6">
-        <h1 className="flex items-center gap-2 text-2xl font-bold">
+      <div className="border-b border-line bg-white px-4 pt-6 pb-5 sm:px-8 sm:pt-10 sm:pb-6">
+        <h1 className="flex items-center gap-2 text-xl font-bold sm:text-2xl">
           <AtSign size={22} /> Mentions & activity
         </h1>
         <p className="mt-1 text-sm text-zinc-500">Every message where someone @mentioned you.</p>
       </div>
-      <div className="mx-auto max-w-3xl px-8 py-6">
+      <div className="mx-auto max-w-3xl px-4 py-5 sm:px-8 sm:py-6">
         {isLoading && <p className="text-sm text-zinc-500">Loading…</p>}
         {data?.mentions.length === 0 && (
-          <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-12 text-center text-sm text-zinc-500">
+          <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500 sm:p-12">
             No mentions yet. When a teammate writes <b>@yourname</b>, it will show up here.
           </div>
         )}

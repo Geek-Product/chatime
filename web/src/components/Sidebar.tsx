@@ -60,11 +60,11 @@ function CreateChannelModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[2px]" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-[2px]" onMouseDown={onClose}>
       <form
         onSubmit={submit}
         onMouseDown={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-xl border border-zinc-300 bg-white p-6 text-ink shadow-2xl"
+        className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-xl border border-zinc-300 bg-white p-5 text-ink shadow-2xl sm:p-6"
         role="dialog"
         aria-label="Create a channel"
       >
@@ -179,7 +179,7 @@ function CreateWorkspaceModal({ onClose }: { onClose: () => void }) {
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[2px]" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-[2px]" onMouseDown={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -189,7 +189,7 @@ function CreateWorkspaceModal({ onClose }: { onClose: () => void }) {
         onMouseDown={(e) => e.stopPropagation()}
         role="dialog"
         aria-label="Create a workspace"
-        className="w-full max-w-md rounded-xl border border-zinc-300 bg-white p-6 text-ink shadow-2xl"
+        className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-xl border border-zinc-300 bg-white p-5 text-ink shadow-2xl sm:p-6"
       >
         <div className="flex items-start justify-between">
           <div>
@@ -387,7 +387,7 @@ function EditWorkspaceModal({ workspace, meId, onClose }: { workspace: Workspace
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[2px]" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-[2px]" onMouseDown={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -398,7 +398,7 @@ function EditWorkspaceModal({ workspace, meId, onClose }: { workspace: Workspace
         onMouseDown={(e) => e.stopPropagation()}
         role="dialog"
         aria-label="Edit workspace"
-        className="w-full max-w-md rounded-xl border border-zinc-300 bg-white p-6 text-ink shadow-2xl"
+        className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-xl border border-zinc-300 bg-white p-5 text-ink shadow-2xl sm:p-6"
       >
         <div className="flex items-start justify-between">
           <div>
@@ -477,7 +477,7 @@ function NewDmModal({
   const existing = new Set(conversations.map((c) => c.other.id));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 pt-24 backdrop-blur-[2px]" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 px-4 pt-16 pb-4 backdrop-blur-[2px] sm:pt-24" onMouseDown={onClose}>
       <div
         role="dialog"
         aria-label="New direct message"
@@ -486,7 +486,7 @@ function NewDmModal({
           // Clicks (or Enter on a focused button) inside the card must not submit anything by accident.
           if (e.target === e.currentTarget) e.preventDefault();
         }}
-        className="w-full max-w-md overflow-hidden rounded-xl border border-zinc-300 bg-white text-ink shadow-2xl"
+        className="flex max-h-[85dvh] w-full max-w-md flex-col overflow-hidden rounded-xl border border-zinc-300 bg-white text-ink shadow-2xl"
       >
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <div>
@@ -552,6 +552,8 @@ export function Sidebar({
   onLogout,
   isAdmin,
   canCreateWorkspace = false,
+  mobileOpen = false,
+  onCloseMobile,
 }: {
   workspaces: Workspace[];
   workspace: Workspace;
@@ -569,6 +571,9 @@ export function Sidebar({
   isAdmin: boolean;
   /** Owner/admin of at least one workspace. */
   canCreateWorkspace?: boolean;
+  /** Drawer state below the `md` breakpoint. */
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -584,6 +589,11 @@ export function Sidebar({
   const switcherRef = useRef<HTMLDivElement>(null);
   useDismiss(switcherRef, showSwitcher, () => setShowSwitcher(false));
   const pendingSignups = usePendingSignups(workspace.id, isAdmin).data?.users.length ?? 0;
+
+  // Picking a channel, DM or view should reveal it instead of leaving the drawer over the chat.
+  useEffect(() => {
+    onCloseMobile?.();
+  }, [location.pathname, onCloseMobile]);
 
   const { data: mentions } = useQuery({
     queryKey: ['notifications', 'mentions'],
@@ -610,7 +620,7 @@ export function Sidebar({
         type="button"
         onClick={() => navigate(`/w/${workspace.id}/d/${c.id}`)}
         className={clsx(
-          'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm',
+          'flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm md:py-1',
           isActive ? 'bg-brand-yellow font-bold text-ink' : 'text-white/70 hover:bg-white/10 hover:text-white',
           !isActive && u > 0 ? 'font-bold text-white' : '',
         )}
@@ -635,7 +645,7 @@ export function Sidebar({
         type="button"
         onClick={() => navigate(`/w/${workspace.id}/c/${ch.id}`)}
         className={clsx(
-          'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm',
+          'flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm md:py-1',
           isActive ? 'bg-brand-yellow font-bold text-ink' : 'text-white/70 hover:bg-white/10 hover:text-white',
           !isActive && u?.unread ? 'font-bold text-white' : '',
         )}
@@ -664,7 +674,13 @@ export function Sidebar({
   return (
     <aside
       data-testid="sidebar"
-      className="sidebar-root flex w-64 shrink-0 flex-col"
+      className={clsx(
+        'sidebar-root flex w-64 shrink-0 flex-col pt-[env(safe-area-inset-top)]',
+        // Off-canvas below `md`; a static column above it. `left` (not transform) keeps
+        // fixed-position modals rendered inside the drawer anchored to the viewport.
+        'max-md:fixed max-md:inset-y-0 max-md:z-50 max-md:w-72 max-md:max-w-[85vw] max-md:transition-[left] max-md:duration-200 max-md:ease-out md:static md:left-auto',
+        mobileOpen ? 'max-md:left-0' : 'max-md:-left-72 max-md:invisible',
+      )}
       style={{ '--sb-bg': color, '--sb-text': textColor } as CSSProperties}
     >
       <div className="relative border-b border-white/15" ref={switcherRef}>
@@ -692,6 +708,14 @@ export function Sidebar({
             title="View your profile"
           >
             Profile
+          </button>
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            className="rounded p-1 text-white/70 hover:bg-white/15 hover:text-white md:hidden"
+            aria-label="Close navigation"
+          >
+            <X size={18} />
           </button>
         </div>
         {showSwitcher && (
@@ -754,7 +778,7 @@ export function Sidebar({
           type="button"
           onClick={() => navigate(`/w/${workspace.id}/mentions`)}
           className={clsx(
-            'mb-2 flex w-full items-center gap-2 rounded-md px-2 py-1 text-sm',
+            'mb-2 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm md:py-1',
             location.pathname.endsWith('/mentions') ? 'bg-brand-yellow font-bold text-ink' : 'text-white/70 hover:bg-white/10',
           )}
         >
@@ -769,7 +793,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={() => setShowSignups(true)}
-            className="mb-1 flex w-full items-center gap-2 rounded-md px-2 py-1 text-sm text-white/70 hover:bg-white/10 hover:text-white"
+            className="mb-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-white/70 hover:bg-white/10 hover:text-white md:py-1"
           >
             <UserCheck size={14} />
             <span>Sign-ups</span>
@@ -833,7 +857,7 @@ export function Sidebar({
                   online: online.has(m.id),
                 })
               }
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm text-white/70 hover:bg-white/10 hover:text-white"
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-white/70 hover:bg-white/10 hover:text-white md:py-1"
               title={`View ${m.displayName}'s profile`}
             >
               <Avatar name={m.displayName} color={m.avatarColor} photo={m.avatarUrl} size={20} online={online.has(m.id)} />
@@ -854,7 +878,7 @@ export function Sidebar({
         type="button"
         onClick={onOpenSettings}
         aria-label="Open settings"
-        className="flex items-center gap-2 border-t border-white/15 px-4 py-3 text-sm text-white/80 hover:bg-white/10"
+        className="flex items-center gap-2 border-t border-white/15 px-4 pt-3 pb-[calc(0.75rem_+_env(safe-area-inset-bottom))] text-sm text-white/80 hover:bg-white/10 md:pb-3"
       >
         <Avatar name={me.displayName} color={me.avatarColor} photo={me.avatarUrl} size={28} />
         <span className="truncate font-semibold">{me.displayName}</span>

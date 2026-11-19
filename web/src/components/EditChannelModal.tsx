@@ -113,7 +113,7 @@ export function EditChannelModal({
         onMouseDown={(e) => e.stopPropagation()}
         role="dialog"
         aria-label="Edit channel"
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-zinc-300 bg-white p-6 text-ink shadow-2xl"
+        className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-xl border border-zinc-300 bg-white p-4 text-ink shadow-2xl sm:p-6"
       >
         <div className="flex items-start justify-between">
           <div>

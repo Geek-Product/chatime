@@ -147,9 +147,9 @@ All settings live in the root `.env` (see `.env.example`); the server validates 
 | `REFRESH_TOKEN_TTL_DAYS` | `30` | Refresh-token lifetime |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | — | Web Push credentials |
 
-Optional: `VITE_API_URL` (default `http://localhost:4000`) tells the dev client which API origin to
-use for the WebSocket. Vite's dev proxy drops WebSocket upgrades, so the socket connects directly to
-the API in development; in production everything shares one origin.
+The dev client talks to the API through Vite's `/api` proxy — including the WebSocket upgrade — so
+`npm run dev` works unchanged on `localhost`, a LAN IP for phone testing, or an HTTPS tunnel. In
+production everything shares one origin.
 
 ## Database
 

@@ -93,6 +93,8 @@ export function MessageItem({
   const [draft, setDraft] = useState(message.content);
   const [showEmoji, setShowEmoji] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  /** Touch devices have no hover, so the action bar opens from a visible trigger. */
+  const [showActions, setShowActions] = useState(false);
   const emojiRef = useRef<HTMLDivElement>(null);
   useDismiss(emojiRef, showEmoji, () => setShowEmoji(false));
   const mine = message.author.id === meId;
@@ -101,14 +103,14 @@ export function MessageItem({
 
   if (deleted) {
     return (
-      <div className="px-5 py-1 text-sm text-zinc-400 italic">{message.parentId ? '' : 'This message was deleted.'}</div>
+      <div className="px-4 py-1 text-sm text-zinc-400 italic md:px-5">{message.parentId ? '' : 'This message was deleted.'}</div>
     );
   }
 
   return (
     <div
       id={`m-${message.id}`}
-      className={`group relative px-5 ${compactGrouped ? 'py-0.5' : 'mt-2 py-1'} ${
+      className={`group relative px-4 pr-10 md:px-5 md:pr-5 ${compactGrouped ? 'py-0.5' : 'mt-2 py-1'} ${
         highlighted ? 'bg-amber-50/80' : mentioned ? 'bg-amber-50/60' : 'hover:bg-hover'
       } ${mentioned || highlighted ? 'border-l-4 border-amber-400 pl-4' : ''}`}
     >
@@ -225,8 +227,23 @@ export function MessageItem({
         </div>
       </div>
 
-      {/* hover toolbar */}
-      <div className="absolute -top-4 right-5 z-10 hidden items-center gap-0.5 rounded-md border border-line bg-white p-0.5 shadow-md group-hover:flex">
+      <button
+        type="button"
+        onClick={() => setShowActions((v) => !v)}
+        className="absolute top-0.5 right-1 z-10 rounded p-1.5 text-zinc-400 hover:bg-hover hover:text-ink md:hidden"
+        aria-label="Message actions"
+        aria-expanded={showActions}
+      >
+        <MoreHorizontal size={16} />
+      </button>
+
+      {/* hover toolbar (desktop) / tap-to-open actions (mobile) */}
+      <div
+        onClick={() => setShowActions(false)}
+        className={`absolute -top-4 right-3 z-10 items-center gap-0.5 rounded-md border border-line bg-white p-0.5 shadow-md md:right-5 ${
+          showActions ? 'flex' : 'hidden group-hover:flex'
+        }`}
+      >
         {QUICK_EMOJI.slice(0, 3).map((emoji) => (
           <button
             key={emoji}
@@ -241,7 +258,10 @@ export function MessageItem({
         <button
           type="button"
           className="rounded px-1.5 py-1 text-zinc-600 hover:bg-hover"
-          onClick={() => setShowEmoji(true)}
+          onClick={() => {
+            setShowEmoji(true);
+            setShowActions(false);
+          }}
           aria-label="Add reaction"
         >
           <SmilePlus size={15} />

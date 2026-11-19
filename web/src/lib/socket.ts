@@ -97,10 +97,10 @@ class SocketClient {
 
   /** The server reads the token from the URL, so it must be renewed before the handshake. */
   private open(token: string) {
-    const base = import.meta.env.DEV ? import.meta.env.VITE_API_URL ?? 'http://localhost:4001' : location.origin;
-    const url = new URL(base);
-    const proto = url.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${proto}://${url.host}/api/ws?token=${encodeURIComponent(this.getToken() ?? token)}`);
+    // Same origin in every mode: the API serves `/api/ws` directly in production,
+    // and the Vite dev proxy upgrades it (including through LAN IPs and HTTPS tunnels).
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.host}/api/ws?token=${encodeURIComponent(this.getToken() ?? token)}`);
     this.ws = ws;
     this.status = 'connecting';
 

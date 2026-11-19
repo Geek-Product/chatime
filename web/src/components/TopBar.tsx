@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, Hash, Lock, Pencil, UserRound } from 'lucide-react';
+import { Bell, Hash, Lock, Menu, Pencil, UserRound } from 'lucide-react';
 import { Avatar } from './Avatar';
 import { api } from '../lib/api';
 import { useDismiss } from '../lib/useDismiss';
@@ -21,6 +21,7 @@ export function TopBar({
   channel,
   dm,
   membersOpen,
+  onToggleSidebar,
   onToggleMembers,
   onOpenMention,
   onOpenProfile,
@@ -29,6 +30,7 @@ export function TopBar({
   channel: Channel | null;
   dm?: { id: string; displayName: string; username: string; avatarColor: string; avatarUrl?: string | null; online: boolean } | null;
   membersOpen: boolean;
+  onToggleSidebar: () => void;
   onToggleMembers: () => void;
   onOpenMention: (m: SavedMention) => void;
   onOpenProfile?: (dm: { id: string; displayName: string; username: string; avatarColor: string; avatarUrl?: string | null; online: boolean }) => void;
@@ -47,8 +49,16 @@ export function TopBar({
   useDismiss(box, open, () => setOpen(false));
 
   return (
-    <header className="relative z-20 flex h-12 shrink-0 items-center justify-between border-b border-line bg-white px-5">
+    <header className="relative z-20 flex h-[calc(3rem_+_env(safe-area-inset-top))] shrink-0 items-center justify-between border-b border-line bg-white px-3 pt-[env(safe-area-inset-top)] md:px-5">
       <div className="flex min-w-0 items-center gap-1.5 text-[15px] font-bold">
+        <button
+          type="button"
+          onClick={onToggleSidebar}
+          className="-ml-1 shrink-0 rounded p-2 text-zinc-600 hover:bg-hover md:hidden"
+          aria-label="Open navigation"
+        >
+          <Menu size={20} />
+        </button>
         {channel ? (
           <>
             {channel.isPrivate ? <Lock size={14} className="text-zinc-500" /> : <Hash size={14} className="text-zinc-500" />}
@@ -66,7 +76,7 @@ export function TopBar({
                 aria-label="Edit channel"
                 title="Edit channel name, topic and members"
               >
-                <Pencil size={12} /> Edit
+                <Pencil size={12} /> <span className="hidden sm:inline">Edit</span>
               </button>
             )}
           </>
@@ -85,7 +95,7 @@ export function TopBar({
               )}
               <span className="truncate">{dm.displayName}</span>
             </button>
-            <span className="ml-1 border-l border-line pl-3 text-sm font-normal">
+            <span className="ml-1 hidden border-l border-line pl-3 text-sm font-normal sm:inline">
               <span className={dm.online ? 'text-emerald-700' : 'text-zinc-600'}>{dm.online ? 'Active' : 'Offline'}</span>
               <span className="ml-2 text-zinc-500">@{dm.username}</span>
             </span>
@@ -112,7 +122,7 @@ export function TopBar({
           </button>
 
           {open && (
-            <div className="absolute right-0 z-40 mt-1 w-96 overflow-hidden rounded-xl border border-line bg-white shadow-2xl">
+            <div className="absolute right-0 z-40 mt-1 w-[min(24rem,calc(100vw_-_1rem))] overflow-hidden rounded-xl border border-line bg-white shadow-2xl">
               <div className="border-b border-line px-4 py-3">
                 <h3 className="font-bold">Mentions</h3>
                 <p className="text-xs text-zinc-500">Recent messages that mention you</p>

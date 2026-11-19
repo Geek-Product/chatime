@@ -332,9 +332,9 @@ export function Composer({
   }
 
   return (
-    <div data-testid="composer" className="relative px-5 pb-6">
+    <div data-testid="composer" className="relative px-3 pb-[calc(0.75rem_+_env(safe-area-inset-bottom))] md:px-5 md:pb-6">
       {candidates.length > 0 && (
-        <div className="absolute bottom-full left-5 z-20 mb-1 w-72 overflow-hidden rounded-lg border border-line bg-white shadow-xl">
+        <div className="absolute bottom-full left-3 z-20 mb-1 w-[min(18rem,calc(100vw_-_1.5rem))] overflow-hidden rounded-lg border border-line bg-white shadow-xl md:left-5">
           <div className="border-b border-line px-3 py-1.5 text-xs font-bold tracking-wide text-zinc-500 uppercase">
             People
           </div>
@@ -387,13 +387,13 @@ export function Composer({
           </div>
         )}
 
-        <div className="relative flex items-center gap-0.5 border-b border-line px-1.5 py-1" role="toolbar" aria-label="Formatting">
+        <div className="relative flex flex-wrap items-center gap-0.5 border-b border-line px-1.5 py-1" role="toolbar" aria-label="Formatting">
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
             title="Attach files"
             aria-label="Attach files"
-            className="rounded p-1.5 text-zinc-500 hover:bg-hover hover:text-ink"
+            className="shrink-0 rounded p-1.5 text-zinc-500 hover:bg-hover hover:text-ink"
           >
             <Paperclip size={15} />
           </button>
@@ -413,7 +413,7 @@ export function Composer({
             title="Emoji, stickers and GIFs"
             aria-label="Emoji, stickers and GIFs"
             aria-expanded={pickerOpen}
-            className={`rounded p-1.5 hover:bg-hover hover:text-ink ${pickerOpen ? 'bg-hover text-accent' : 'text-zinc-500'}`}
+            className={`shrink-0 rounded p-1.5 hover:bg-hover hover:text-ink ${pickerOpen ? 'bg-hover text-accent' : 'text-zinc-500'}`}
           >
             <Smile size={15} />
           </button>
@@ -426,7 +426,7 @@ export function Composer({
               />
             </div>
           )}
-          <span className="mx-1 h-4 w-px bg-line" />
+          <span className="mx-1 h-4 w-px shrink-0 bg-line" />
           {FORMATS.map((f) => (
             <button
               key={f.label}
@@ -437,13 +437,13 @@ export function Composer({
               }}
               title={f.label}
               aria-label={f.label}
-              className="rounded p-1.5 text-zinc-500 hover:bg-hover hover:text-ink"
+              className="shrink-0 rounded p-1.5 text-zinc-500 hover:bg-hover hover:text-ink"
             >
               <f.Icon size={15} />
             </button>
           ))}
           {!compact && (
-            <span className="ml-auto pr-1 text-[11px] text-zinc-400">
+            <span className="ml-auto hidden pr-1 text-[11px] text-zinc-400 md:inline">
               <b>Enter</b> {editingId ? 'save' : 'send'} · <b>Shift+Enter</b> new line · <b>↑</b> edit last · **bold** _italic_ {'```'} code
             </span>
           )}
@@ -543,8 +543,8 @@ export function Composer({
           className="block max-h-[200px] w-full resize-none bg-transparent px-3 pt-2.5 pb-2 text-[15px] outline-none placeholder:text-zinc-400"
           aria-label="Message"
         />
-        <div className="flex items-center justify-between px-2 pb-1.5">
-          <span className="pl-1 text-[11px] text-zinc-400">
+        <div className="flex items-center justify-between gap-2 px-2 pb-1.5">
+          <span className="truncate pl-1 text-[11px] text-zinc-400">
             {editingId
               ? 'Editing your last message · Enter save · Esc cancel'
               : dragging ? 'Drop files to attach' : `Attach up to ${limits?.max ?? MAX_FILES} files · max ${limits?.mb ?? 25} MB · paste or drop`}
@@ -553,7 +553,7 @@ export function Composer({
             type="button"
             onClick={() => void send()}
             disabled={!canSubmit}
-            className="rounded bg-accent px-3 py-1 text-xs font-bold text-white hover:bg-accent-hover disabled:opacity-40"
+            className="shrink-0 rounded bg-accent px-3.5 py-1.5 text-sm font-bold text-white hover:bg-accent-hover disabled:opacity-40 md:px-3 md:py-1 md:text-xs"
           >
             {editingId ? 'Save' : 'Send'}
           </button>

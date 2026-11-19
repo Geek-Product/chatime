@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2 } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
@@ -63,7 +63,12 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
   const focusId = searchParams.get('m');
   const jumpId = searchParams.get('jump');
 
-  const [membersOpen, setMembersOpen] = useState(true);
+  // The members column is a static panel on wide screens and a drawer elsewhere.
+  const [membersOpen, setMembersOpen] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches,
+  );
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
   const [settingsTab, setSettingsTab] = useState<'preferences' | 'profile' | 'account' | null>(null);
   const profileSettingsRequests = useProfileSettingsRequest();
   const [editChannelOpen, setEditChannelOpen] = useState(false);
@@ -594,11 +599,24 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
         online={online}
         activeChannelId={channel?.id ?? null}
         activeConversationId={conversation?.id ?? null}
-        onOpenSettings={() => setSettingsTab('preferences')}
+        onOpenSettings={() => {
+          closeSidebar();
+          setSettingsTab('preferences');
+        }}
         onLogout={() => void logout()}
         isAdmin={isAdmin}
         canCreateWorkspace={canCreateWorkspace}
+        mobileOpen={sidebarOpen}
+        onCloseMobile={closeSidebar}
       />
+
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          onMouseDown={closeSidebar}
+          aria-hidden="true"
+        />
+      )}
 
       <main className="flex min-w-0 flex-1 flex-col bg-white">
         <TopBar
@@ -614,6 +632,7 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
               }
             : null}
           membersOpen={membersOpen}
+          onToggleSidebar={() => setSidebarOpen(true)}
           onToggleMembers={() => setMembersOpen((v) => !v)}
           onOpenMention={(m: SavedMention) => openMention(m)}
           onEditChannel={channel ? () => setEditChannelOpen(true) : undefined}
@@ -696,8 +715,24 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
           )}
 
           {membersOpen && !isMentionsView && !conversation && (
-            <aside className="hidden w-60 shrink-0 overflow-y-auto border-l border-line bg-white xl:block">
-              <div className="px-4 pt-4 pb-2 text-xs font-bold tracking-wide text-zinc-500 uppercase">Members — {members.length}</div>
+            <>
+              <div
+                className="fixed inset-0 z-40 bg-black/40 xl:hidden"
+                onMouseDown={() => setMembersOpen(false)}
+                aria-hidden="true"
+              />
+              <aside className="fixed inset-y-0 right-0 z-50 flex w-72 max-w-[85vw] flex-col overflow-y-auto border-l border-line bg-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] xl:static xl:z-auto xl:w-60 xl:max-w-none xl:shrink-0 xl:pt-0 xl:pb-0">
+                <div className="flex items-center justify-between px-4 pt-4 pb-2">
+                  <div className="text-xs font-bold tracking-wide text-zinc-500 uppercase">Members — {members.length}</div>
+                  <button
+                    type="button"
+                    onClick={() => setMembersOpen(false)}
+                    className="rounded p-1 text-zinc-500 hover:bg-hover xl:hidden"
+                    aria-label="Close members"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
               {members.map((m) => (
                 <button
                   key={m.id}
@@ -732,7 +767,8 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
                   ))}
                 </div>
               </div>
-            </aside>
+              </aside>
+            </>
           )}
         </div>
       </main>

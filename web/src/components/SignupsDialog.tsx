@@ -73,12 +73,12 @@ export function SignupsDialog({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[2px]" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-[2px]" onMouseDown={onClose}>
       <div
         role="dialog"
         aria-label="Sign-up requests"
         onMouseDown={(e) => e.stopPropagation()}
-        className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-xl border border-zinc-300 bg-white p-6 text-ink shadow-2xl"
+        className="flex max-h-[85dvh] w-full max-w-lg flex-col rounded-xl border border-zinc-300 bg-white p-4 text-ink shadow-2xl sm:p-6"
       >
         <div className="flex items-start justify-between">
           <div>

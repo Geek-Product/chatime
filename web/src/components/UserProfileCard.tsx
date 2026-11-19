@@ -63,7 +63,7 @@ export function UserProfileCard() {
       <div
         role="dialog"
         aria-label={`Profile of ${shown.displayName}`}
-        className="fixed top-16 right-6 z-50 w-80 overflow-hidden rounded-xl border border-line bg-white shadow-2xl"
+        className="fixed inset-x-3 bottom-[calc(0.75rem_+_env(safe-area-inset-bottom))] z-50 max-h-[85dvh] overflow-y-auto rounded-xl border border-line bg-white shadow-2xl sm:inset-x-auto sm:top-16 sm:right-6 sm:bottom-auto sm:w-80"
       >
         <div className="relative h-16 bg-gradient-to-r from-zinc-200 to-zinc-100" />
         <button

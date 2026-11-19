@@ -38,7 +38,10 @@ export function ThreadPanel({
   });
 
   return (
-    <aside className="flex w-[420px] shrink-0 flex-col border-l border-line bg-white">
+    <aside
+      aria-label="Thread"
+      className="fixed inset-0 z-40 flex w-full flex-col bg-white pt-[env(safe-area-inset-top)] md:static md:z-auto md:w-[420px] md:shrink-0 md:border-l md:border-line md:pt-0"
+    >
       <header className="flex items-center justify-between border-b border-line px-4 py-3">
         <div>
           <h2 className="text-sm font-bold">Thread</h2>

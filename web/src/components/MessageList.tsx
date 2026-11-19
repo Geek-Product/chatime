@@ -122,10 +122,10 @@ export function MessageList(props: Props) {
           if (atBottom.current) setShowJump(false);
           if (el.scrollTop < 80 && hasMore && !loadingOlder) loadOlder();
         }}
-        className="flex-1 overflow-y-auto"
+        className="flex-1 overflow-y-auto overscroll-contain"
       >
-        <div className="border-b border-line px-5 pt-10 pb-4">
-          <h1 className="flex items-center gap-2 text-2xl font-bold">
+        <div className="border-b border-line px-4 pt-6 pb-4 md:px-5 md:pt-10">
+          <h1 className="flex items-center gap-2 text-xl font-bold md:text-2xl">
             {props.header.avatar && (
               <Avatar name={props.header.avatar.name} color={props.header.avatar.color} photo={props.header.avatar.photo} size={28} online={props.header.avatar.online} />
             )}
@@ -152,14 +152,14 @@ export function MessageList(props: Props) {
             return (
               <div key={m.id}>
                 {showDay && (
-                  <div className="sticky top-0 z-[5] my-3 flex items-center gap-3 px-5">
+                  <div className="sticky top-0 z-[5] my-3 flex items-center gap-3 px-4 md:px-5">
                     <div className="h-px flex-1 bg-line" />
                     <span className="rounded-full border border-line bg-white px-3 py-0.5 text-xs font-bold">{dayLabel(m.createdAt)}</span>
                     <div className="h-px flex-1 bg-line" />
                   </div>
                 )}
                 {i === jumpIndex && (
-                  <div className="my-2 flex items-center gap-3 px-5" id={`jump-${m.id}`}>
+                  <div className="my-2 flex items-center gap-3 px-4 md:px-5" id={`jump-${m.id}`}>
                     <div className="h-px flex-1 bg-red-400" />
                     <span className="rounded-full bg-red-500 px-2.5 py-0.5 text-[11px] font-bold text-white">New</span>
                     <div className="h-px flex-1 bg-red-400" />
@@ -183,7 +183,7 @@ export function MessageList(props: Props) {
             );
           })}
           {messages.length === 0 && (
-            <div className="px-5 py-16 text-center text-sm text-zinc-500">
+            <div className="px-4 py-12 text-center text-sm text-zinc-500 md:px-5 md:py-16">
               This is the very beginning of{' '}
               <b>{props.header.kind === 'dm' ? `your conversation with ${props.header.name}` : `#${props.header.name}`}</b>. Say hi! 👋
             </div>
@@ -195,7 +195,7 @@ export function MessageList(props: Props) {
         <button
           type="button"
           onClick={() => scrollToBottom(true)}
-          className="absolute right-6 bottom-36 flex items-center gap-1 rounded-full border border-line bg-white px-3 py-1 text-xs font-semibold text-accent shadow-md hover:bg-hover"
+          className="absolute right-4 bottom-32 flex items-center gap-1 rounded-full border border-line bg-white px-3 py-1 text-xs font-semibold text-accent shadow-md hover:bg-hover md:right-6 md:bottom-36"
         >
           <ArrowDown size={14} /> Jump to latest
         </button>

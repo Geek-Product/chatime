@@ -80,7 +80,7 @@ export function EmojiPicker({
     <div
       role="dialog"
       aria-label="Emoji, stickers and GIFs"
-      className="flex w-[336px] flex-col overflow-hidden rounded-xl border border-line bg-white shadow-2xl"
+      className="flex w-[min(336px,calc(100vw_-_1.5rem))] flex-col overflow-hidden rounded-xl border border-line bg-white shadow-2xl"
     >
       <div className="flex items-center gap-1 border-b border-line px-2 py-1.5">
         {TABS.map(({ id, label, Icon }) => (
