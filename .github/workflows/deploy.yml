@@ -1,3 +1,4 @@
+
 name: Build & Deploy
 
 on:
@@ -43,11 +44,7 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     environment: prod
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
       - name: Render .env from secrets
-        id: env
         env:
           APP_URL: ${{ secrets.APP_URL }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -57,123 +54,120 @@ jobs:
           CLIENT_ORIGIN: ${{ secrets.CLIENT_ORIGIN }}
         run: |
           set -euo pipefail
-
-          required=(
-            APP_URL
-            DATABASE_URL
-            CHATIME_DATABASE_URL
-            JWT_SECRET
-            UPLOAD_MAX_MB
-          )
-
+          umask 077
+          required=(APP_URL DATABASE_URL CHATIME_DATABASE_URL JWT_SECRET UPLOAD_MAX_MB)
           for v in "${required[@]}"; do
             if [ -z "${!v:-}" ]; then
               echo "::error::Missing required secret: $v"
               exit 1
             fi
           done
-
           printf '%s\n' \
-            "PORT=4001" \
-            "CHATIME_PORT=4001" \
-            "CLIENT_ORIGIN=$CLIENT_ORIGIN" \
-            "APP_URL=$APP_URL" \
-            "NODE_ENV=production" \
-            "DATABASE_URL=$DATABASE_URL" \
-            "CHATIME_DATABASE_URL=$CHATIME_DATABASE_URL" \
-            "UPLOAD_DIR=server/uploads" \
-            "UPLOAD_MAX_MB=$UPLOAD_MAX_MB" \
-            "JWT_SECRET=$JWT_SECRET" \
-            "ACCESS_TOKEN_TTL=15m" \
-            "REFRESH_TOKEN_TTL_DAYS=30" \
-            > .env.rendered
-
+            "PORT=4001" "CHATIME_PORT=4001" "CLIENT_ORIGIN=$CLIENT_ORIGIN" \
+            "APP_URL=$APP_URL" "NODE_ENV=production" "DATABASE_URL=$DATABASE_URL" \
+            "CHATIME_DATABASE_URL=$CHATIME_DATABASE_URL" "UPLOAD_DIR=server/uploads" \
+            "UPLOAD_MAX_MB=$UPLOAD_MAX_MB" "JWT_SECRET=$JWT_SECRET" \
+            "ACCESS_TOKEN_TTL=15m" "REFRESH_TOKEN_TTL_DAYS=30" > .env.rendered
           chmod 600 .env.rendered
-          echo "env_file=.env.rendered" >> "$GITHUB_OUTPUT"
 
       
-      - name: Test SSH connection
+      - name: Prepare SSH
         shell: bash
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          SSH_USER="${{ secrets.SSH_USER }}"
-          SSH_HOST="${{ secrets.SSH_HOST }}"
-          SSH_PORT="${{ secrets.SSH_PORT || 22 }}"
-          SSH_KEY="${{ secrets.SSH_PRIVATE_KEY }}"
-          TARGET="/opt/chatime"
+          umask 077
 
-          # Strip carriage returns (\r) yang sering ada di secret GitHub
           SSH_KEY="${SSH_KEY//$'\r'/}"
+          KEY_FILE="$RUNNER_TEMP/chatime-deploy-key"
 
-          KEY_FILE="/tmp/chatime-deploy-key"
           printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
           chmod 600 "$KEY_FILE"
 
-          # Validasi format key sebelum digunakan
           if ! ssh-keygen -y -f "$KEY_FILE" >/dev/null 2>&1; then
-            echo "::error::SSH key is invalid or empty. Check SSH_PRIVATE_KEY secret."
+            echo "::error::Invalid SSH private key."
             exit 1
           fi
 
+      - name: Test SSH connection
+        shell: bash
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+        run: |
+          set -euo pipefail
+
+          KEY_FILE="$RUNNER_TEMP/chatime-deploy-key"
+
+          ssh_opts=(
+            -i "$KEY_FILE"
+            -p "$SSH_PORT"
+            -o StrictHostKeyChecking=no
+            -o UserKnownHostsFile=/dev/null
+            -o ConnectTimeout=10
+            -o BatchMode=yes
+          )
+
+          ssh "${ssh_opts[@]}" "${SSH_USER}@${SSH_HOST}" \
+            "whoami && mkdir -p /opt/chatime/deploy"
+
+      - name: Transfer deployment config via SSH
+        shell: bash
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+        run: |
+          set -euo pipefail
+          KEY_FILE="$RUNNER_TEMP/chatime-deploy-key"
           ssh_opts=(-i "$KEY_FILE" -p "$SSH_PORT" \
             -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             -o ConnectTimeout=10 -o BatchMode=yes)
 
-          echo "Testing SSH to ${SSH_USER}@${SSH_HOST}:${SSH_PORT}"
-          ssh "${ssh_opts[@]}" "${SSH_USER}@${SSH_HOST}" "echo SSH_OK; whoami; ls -la ${TARGET}"
-          echo "SSH connection test passed"
+          # File stabil → selalu dikirim (robust terhadap penghapusan di remote)
+          echo "Sending docker-compose.yml..."
+          ssh "${ssh_opts[@]}" "${SSH_USER}@${SSH_HOST}" \
+            'mkdir -p /opt/chatime && cat > /opt/chatime/docker-compose.yml' \
+            < docker-compose.yml
+
+          echo "Sending deploy/deploy.sh..."
+          ssh "${ssh_opts[@]}" "${SSH_USER}@${SSH_HOST}" \
+            'mkdir -p /opt/chatime/deploy && cat > /opt/chatime/deploy/deploy.sh && chmod 700 /opt/chatime/deploy/deploy.sh' \
+            < deploy/deploy.sh
+
+          # .env.rendered: selalu dikirim (secrets selalu berubah)
+          echo "Sending .env.rendered..."
+          cat .env.rendered | ssh "${ssh_opts[@]}" "${SSH_USER}@${SSH_HOST}" \
+            "cat > /opt/chatime/.env && chmod 600 /opt/chatime/.env"
+
+          echo "Configuration transfer completed."
 
       - name: Deploy via GHCR image pull over SSH
         shell: bash
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHATIME_IMAGE: ghcr.io/geek-product/chatime:main-${{ github.sha }}
         run: |
           set -euo pipefail
-          SSH_USER="${{ secrets.SSH_USER }}"
-          SSH_HOST="${{ secrets.SSH_HOST }}"
-          SSH_PORT="${{ secrets.SSH_PORT || 22 }}"
-          SSH_KEY="${{ secrets.SSH_PRIVATE_KEY }}"
-          TARGET="/opt/chatime"
-
-          SSH_KEY="${SSH_KEY//$'\r'/}"
-
-          KEY_FILE="/tmp/chatime-deploy-key"
-          printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
-          chmod 600 "$KEY_FILE"
-
-          if ! ssh-keygen -y -f "$KEY_FILE" >/dev/null 2>&1; then
-            echo "::error::SSH private key is invalid. Check SSH_PRIVATE_KEY secret."
-            exit 1
-          fi
-
+          KEY_FILE="$RUNNER_TEMP/chatime-deploy-key"
           ssh_opts=(-i "$KEY_FILE" -p "$SSH_PORT" \
             -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             -o ConnectTimeout=10 -o BatchMode=yes)
 
-          echo "Pulling image into ${SSH_USER}@${SSH_HOST}:${TARGET}"
-          ssh "${ssh_opts[@]}" "${SSH_USER}@${SSH_HOST}" '
-            set -euo pipefail
-            cd /opt/chatime
+          echo "Deploying image: $CHATIME_IMAGE"
+          printf '%s' "$GHCR_TOKEN" | ssh "${ssh_opts[@]}" "${SSH_USER}@${SSH_HOST}" \
+            "docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin"
 
-            CHATIME_IMAGE="ghcr.io/geek-product/chatime:main-${{ github.sha }}"
+          # Eksekusi logika deploy yang sudah terpusat di deploy.sh (sangat singkat)
+          ssh "${ssh_opts[@]}" "${SSH_USER}@${SSH_HOST}" \
+            "CHATIME_DIR=/opt/chatime CHATIME_IMAGE='$CHATIME_IMAGE' /opt/chatime/deploy/deploy.sh"
 
-            cat > .env.rendered
-            cp .env.rendered .env
-            chmod 600 .env
-
-            # Login ke GHCR di remote (runner tidak punya sesi login di remote)
-            docker login ghcr.io -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}"
-
-            docker pull "$CHATIME_IMAGE"
-            docker compose up -d --no-build --remove-orphans
-
-            for i in $(seq 1 40); do
-              if [ "$(docker inspect --format "{{.State.Health.Status}}" chatime-app 2>/dev/null)" = "healthy" ]; then
-                echo "chatime-app healthy with $CHATIME_IMAGE"
-                docker image prune -f >/dev/null 2>&1 || true
-                exit 0
-              fi
-              sleep 3
-            done
-            echo "chatime-app did not become healthy" >&2
-            docker compose logs --tail 50 app >&2 || true
-            exit 1
-          ' < .env.rendered
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/chatime-deploy-key"
