@@ -84,9 +84,6 @@ jobs:
             "JWT_SECRET=$JWT_SECRET" \
             "ACCESS_TOKEN_TTL=15m" \
             "REFRESH_TOKEN_TTL_DAYS=30" \
-            "VAPID_PUBLIC_KEY=$VAPID_PUBLIC_KEY" \
-            "VAPID_PRIVATE_KEY=$VAPID_PRIVATE_KEY" \
-            "VAPID_SUBJECT=$VAPID_SUBJECT" \
             > .env.rendered
 
           chmod 600 .env.rendered
