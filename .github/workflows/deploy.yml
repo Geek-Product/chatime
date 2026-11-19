@@ -137,9 +137,15 @@ jobs:
           SSH_KEY="${SSH_KEY//$'\r'/}"
 
           KEY_FILE="/tmp/chatime-deploy-key"
-          printf '%s' "$SSH_KEY" > "$KEY_FILE"
+          printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
           chmod 600 "$KEY_FILE"
 
+          # Validasi format private key sebelum dipakai
+          if ! ssh-keygen -y -f "$KEY_FILE" >/dev/null 2>&1; then
+            echo "::error::SSH private key is invalid. Check SSH_PRIVATE_KEY secret."
+            exit 1
+          fi
+          
           ssh_opts=(-i "$KEY_FILE" -p "$SSH_PORT" \
             -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             -o ConnectTimeout=10 -o BatchMode=yes)
