@@ -133,47 +133,44 @@ jobs:
           SSH_KEY="${{ secrets.SSH_PRIVATE_KEY }}"
           TARGET="/opt/chatime"
 
-          # Strip carriage returns (\r) yang sering ada di secret GitHub
           SSH_KEY="${SSH_KEY//$'\r'/}"
 
           KEY_FILE="/tmp/chatime-deploy-key"
           printf '%s\n' "$SSH_KEY" > "$KEY_FILE"
           chmod 600 "$KEY_FILE"
 
-          # Validasi format private key sebelum dipakai
           if ! ssh-keygen -y -f "$KEY_FILE" >/dev/null 2>&1; then
             echo "::error::SSH private key is invalid. Check SSH_PRIVATE_KEY secret."
             exit 1
           fi
-          
+
           ssh_opts=(-i "$KEY_FILE" -p "$SSH_PORT" \
             -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             -o ConnectTimeout=10 -o BatchMode=yes)
 
           export CHATIME_IMAGE="ghcr.io/geek-product/chatime:main-${{ github.sha }}"
 
-          echo "Pulling latest code into ${SSH_USER}@${SSH_HOST}:${TARGET} via git pull"
+          echo "Pulling latest code into ${SSH_USER}@${SSH_HOST}:${TARGET}"
           ssh "${ssh_opts[@]}" "${SSH_USER}@${SSH_HOST}" '
             set -euo pipefail
             cd /opt/chatime
 
-            if [ ! -d /opt/chatime/.git ]; then
-              echo "Remote /opt/chatime is not a git repo - initializing..."
-              rm -rf /opt/chatime.new
-              git clone --branch main https://github.com/geek-product/chatime.git /opt/chatime.new
-              mv /opt/chatime.new/* /opt/chatime/
-              rmdir /opt/chatime.new
-            else
-              # Kalau SUDAH ada git repo → hanya ambil commit terbaru
-              git pull --ff-only origin main
+            # Inisialisasi repo HANYA jika belum ada (.git tidak ada)
+            if [ ! -d ./.git ]; then
+              echo "Remote /opt/chatime belum jadi git repo - menginisialisasi..."
+              git init
+              git remote add origin https://github.com/geek-product/chatime.git
             fi
 
-            # Inject rendered env (secrets are NOT committed to the repo)
+            # Ambil + update ke commit terbaru (jalan setiap deploy)
+            git fetch origin
+            git reset --hard origin/main
+
+            # Inject rendered env (secrets NOT committed to repo)
             cp .env.rendered .env
             chmod 600 .env
 
-            chmod +x deploy/deploy.sh
-
+            # Deploy
             docker pull "$CHATIME_IMAGE"
             docker compose up -d --no-build --remove-orphans
 
