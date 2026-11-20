@@ -44,33 +44,77 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     environment: prod
     steps:
-      - name: Render .env from secrets
+      - uses: actions/checkout@v4
+
+      - name: Fetch secrets from Infisical
+        shell: bash
         env:
-          APP_URL: ${{ secrets.APP_URL }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          CHATIME_DATABASE_URL: ${{ secrets.CHATIME_DATABASE_URL }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          UPLOAD_MAX_MB: ${{ secrets.UPLOAD_MAX_MB }}
-          CLIENT_ORIGIN: ${{ secrets.CLIENT_ORIGIN }}
+          INFISICAL_TOKEN: ${{ secrets.INFISICAL_TOKEN }}
+          INFISICAL_PROJECT_ID: ${{ secrets.INFISICAL_PROJECT_ID }}
+          INFISICAL_URL: ${{ secrets.INFISICAL_URL }}
+          INFISICAL_ENV: ${{ secrets.INFISICAL_ENV }}
+          INFISICAL_PATH: ${{ secrets.INFISICAL_PATH }}
         run: |
           set -euo pipefail
           umask 077
-          required=(APP_URL DATABASE_URL CHATIME_DATABASE_URL JWT_SECRET UPLOAD_MAX_MB)
+
+          command -v infisical >/dev/null || {
+            echo "::error::Infisical CLI is not installed on runner"
+            exit 1
+          }
+
+          export INFISICAL_DISABLE_UPDATE_CHECK=true
+          test -n "$INFISICAL_URL" || {
+            echo "::error::Missing INFISICAL_URL"
+            exit 1
+          }
+          export INFISICAL_DOMAIN="${INFISICAL_URL%/}"
+
+          test -n "$INFISICAL_PROJECT_ID" || {
+            echo "::error::Missing INFISICAL_PROJECT_ID"
+            exit 1
+          }
+
+          infisical export \
+            --projectId="$INFISICAL_PROJECT_ID" \
+            --env="$INFISICAL_ENV" \
+            --path="$INFISICAL_PATH" \
+            --format=dotenv-eval \
+            --output-file=.env.infisical
+          chmod 600 .env.infisical
+
+      - name: Render .env
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          # Infisical dotenv output is shell-compatible; values stay on runner only.
+          set -a
+          . ./.env.infisical
+          set +a
+
+          required=(APP_URL CHATIME_DATABASE_URL JWT_SECRET UPLOAD_MAX_MB CLIENT_ORIGIN)
           for v in "${required[@]}"; do
             if [ -z "${!v:-}" ]; then
-              echo "::error::Missing required secret: $v"
+              echo "::error::Missing required Infisical secret: $v"
               exit 1
             fi
           done
+
           printf '%s\n' \
-            "PORT=4001" "CHATIME_PORT=4001" "CLIENT_ORIGIN=$CLIENT_ORIGIN" \
-            "APP_URL=$APP_URL" "NODE_ENV=production" "DATABASE_URL=$DATABASE_URL" \
-            "CHATIME_DATABASE_URL=$CHATIME_DATABASE_URL" "UPLOAD_DIR=server/uploads" \
-            "UPLOAD_MAX_MB=$UPLOAD_MAX_MB" "JWT_SECRET=$JWT_SECRET" \
-            "ACCESS_TOKEN_TTL=15m" "REFRESH_TOKEN_TTL_DAYS=30" > .env.rendered
+            "PORT=4001" \
+            "CHATIME_PORT=4001" \
+            "CLIENT_ORIGIN=$CLIENT_ORIGIN" \
+            "APP_URL=$APP_URL" \
+            "NODE_ENV=production" \
+            "CHATIME_DATABASE_URL=$CHATIME_DATABASE_URL" \
+            "UPLOAD_DIR=server/uploads" \
+            "UPLOAD_MAX_MB=$UPLOAD_MAX_MB" \
+            "JWT_SECRET=$JWT_SECRET" \
+            "ACCESS_TOKEN_TTL=15m" \
+            "REFRESH_TOKEN_TTL_DAYS=30" > .env.rendered
           chmod 600 .env.rendered
 
-      
       - name: Prepare SSH
         shell: bash
         env:
@@ -168,6 +212,7 @@ jobs:
           ssh "${ssh_opts[@]}" "${SSH_USER}@${SSH_HOST}" \
             "CHATIME_DIR=/opt/chatime /opt/chatime/deploy/deploy.sh '$CHATIME_IMAGE'"
 
-      - name: Cleanup SSH key
+      - name: Cleanup sensitive files
         if: always()
-        run: rm -f "$RUNNER_TEMP/chatime-deploy-key"
+        run: |
+          rm -f "$RUNNER_TEMP/chatime-deploy-key" .env.infisical .env.rendered
