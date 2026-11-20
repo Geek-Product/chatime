@@ -2,7 +2,6 @@ import { timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { env } from '../../env';
 import { db } from '../db/index';
 import { channels, users, webhooks } from '../db/schema';
 import { assertWorkspaceAdmin } from '../lib/access';
@@ -81,6 +80,8 @@ export async function webhookReceiverRoutes(app: FastifyInstance) {
       author: { id: hook.botUserId, displayName: hook.name },
       content,
       silenced: [hook.botUserId],
+      // With `notify` the block below sends its own branded push; avoid the generic duplicate.
+      notify: !hook.notify,
     });
 
     void db.update(webhooks).set({ lastUsedAt: new Date() }).where(eq(webhooks.id, hook.id))
@@ -91,7 +92,10 @@ export async function webhookReceiverRoutes(app: FastifyInstance) {
       const recipients = await announceRecipients(channel.id, hook.workspaceId, [hook.botUserId]);
       const at = inserted.createdAt.toISOString();
       const snippet = plainSnippet(content);
+      const unreadByRecipient = new Map<string, { unread: number; mentions: number }>();
       for (const userId of recipients) {
+        const counts = await unreadTotal(userId, await workspaceIdsOf(userId));
+        unreadByRecipient.set(userId, counts);
         hub.sendToUser(userId, {
           type: 'notification',
           notification: {
@@ -104,16 +108,17 @@ export async function webhookReceiverRoutes(app: FastifyInstance) {
             authorName: hook.name,
             snippet,
             at,
-            unreadMentions: (await unreadTotal(userId, await workspaceIdsOf(userId))).mentions,
+            unreadMentions: counts.mentions,
           },
         });
       }
-      await sendPushToUsers(recipients, {
+      await sendPushToUsers(recipients, (userId) => ({
         title: `${hook.name} posted in #${channel.name}`,
         body: snippet,
-        url: `${env.APP_URL}/w/${hook.workspaceId}/c/${channel.id}?m=${inserted.id}`,
+        url: `/w/${hook.workspaceId}/c/${channel.id}?m=${inserted.id}`,
         tag: `channel-${channel.id}`,
-      });
+        badge: unreadByRecipient.get(userId)?.unread ?? 0,
+      }));
     }
 
     return reply.code(201).send({ ok: true, messageId: inserted.id });

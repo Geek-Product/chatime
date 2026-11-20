@@ -1,5 +1,5 @@
 /* Team Chat service worker: app-shell/offline caching plus Web Push. */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL_CACHE = `chatime-shell-${VERSION}`;
 const STATIC_CACHE = `chatime-static-${VERSION}`;
 const API_CACHE = `chatime-api-${VERSION}`;
@@ -146,16 +146,32 @@ self.addEventListener('push', (event) => {
   } catch {
     payload = { title: 'Team Chat', body: event.data.text() };
   }
-  event.waitUntil(
-    self.registration.showNotification(payload.title ?? 'Team Chat', {
+  event.waitUntil((async () => {
+    await updateAppBadge(payload.badge);
+    // Each device decides for itself: a focused window already renders the message live,
+    // while a minimized, backgrounded or closed app still gets the system notification.
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    if (windows.some((client) => client.focused && client.visibilityState !== 'hidden')) return;
+    await self.registration.showNotification(payload.title ?? 'Team Chat', {
       body: payload.body ?? '',
       tag: payload.tag,
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',
       data: { url: payload.url ?? '/' },
-    }),
-  );
+    });
+  })());
 });
+
+/** Badging API on the service worker registration (Chrome/Edge, Safari home-screen apps). */
+async function updateAppBadge(count) {
+  if (typeof count !== 'number') return;
+  try {
+    if (count > 0) await self.registration.setAppBadge?.(count);
+    else await self.registration.clearAppBadge?.();
+  } catch {
+    /* badging unsupported */
+  }
+}
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();

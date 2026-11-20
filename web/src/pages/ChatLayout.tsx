@@ -17,6 +17,8 @@ import MentionsView from './MentionsView';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import { useRealtime } from '../lib/useRealtime';
+import { enablePush, ensurePushSubscription, pushSupported } from '../lib/push';
+import { syncAppBadge } from '../lib/badge';
 import { setReplyCount } from '../lib/replyCounting';
 import { signupBadgeKey } from '../components/SignupsDialog';
 import { useOnlineUsers } from '../lib/usePresence';
@@ -47,6 +49,7 @@ interface HistoryPage extends MessagesPage {
 
 const PAGE_SIZE = 40;
 const DM_PAGE_SIZE = 30;
+const NOTIFY_PROMPT_KEY = 'tc.notifyPromptDismissed';
 
 const threadKey = (channelId: string, parentId: string) => ['thread', channelId, parentId] as const;
 const threadOf = (message: Message) => (message.channelId ? threadKey(message.channelId, message.id) : null);
@@ -167,6 +170,30 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
   const unread = unreadData?.channels ?? [];
   const unreadDms = unreadData?.conversations ?? [];
 
+  // Permission may already be granted from a previous session; re-register this device silently.
+  useEffect(() => {
+    void ensurePushSubscription().catch(() => {});
+  }, []);
+
+  // Mobile browsers never offer the permission prompt on their own; offer it once here.
+  const [notifyPromptOpen, setNotifyPromptOpen] = useState(
+    () => pushSupported() && Notification.permission === 'default' && localStorage.getItem(NOTIFY_PROMPT_KEY) !== '1',
+  );
+  const dismissNotifyPrompt = () => {
+    localStorage.setItem(NOTIFY_PROMPT_KEY, '1');
+    setNotifyPromptOpen(false);
+  };
+  const enableNotifications = async () => {
+    try {
+      await enablePush();
+      dismissNotifyPrompt();
+      toast.success('Notifications enabled');
+    } catch (err) {
+      if (Notification.permission !== 'default') dismissNotifyPrompt();
+      toast.error((err as Error).message);
+    }
+  };
+
   // Channel and DM threads share this component; only one of them is ever active.
   const activeId = conversation ? conversation.id : (channel?.id ?? null);
 
@@ -216,10 +243,12 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
     return null;
   }, [conversation, channel, online]);
 
-  // ---- side effects: title badge, mark read, stale ids ----
+  // ---- side effects: title/icon badges, mark read, stale ids ----
   const totalUnread = unreadData?.unread ?? 0;
   useEffect(() => {
     document.title = totalUnread > 0 ? `(${totalUnread}) Team Chat` : 'Team Chat';
+    // Same number on the installed app's icon where the Badging API exists.
+    syncAppBadge(totalUnread);
   }, [totalUnread]);
 
   const markChannelRead = useCallback(() => {
@@ -648,6 +677,27 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
             })
           }
         />
+
+        {notifyPromptOpen && (
+          <div className="flex items-center gap-2 border-b border-line bg-accent-soft px-3 py-2 text-xs text-ink md:hidden">
+            <span className="min-w-0 flex-1">Get notified about new messages while the app is minimized.</span>
+            <button
+              type="button"
+              onClick={() => void enableNotifications()}
+              className="shrink-0 rounded bg-accent px-2.5 py-1 font-bold text-white hover:bg-accent-hover"
+            >
+              Enable
+            </button>
+            <button
+              type="button"
+              onClick={dismissNotifyPrompt}
+              className="shrink-0 px-1 font-semibold text-zinc-600 hover:text-ink"
+              aria-label="Dismiss notification prompt"
+            >
+              Not now
+            </button>
+          </div>
+        )}
 
         <div className="flex min-h-0 flex-1">
           {isMentionsView ? (

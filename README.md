@@ -295,9 +295,11 @@ previews, and the same realtime behaviour as channels. Threads are channel-only.
 
 - **In-app**: unread badges, bold channel names, tab title `(n) Team Chat`, mention toast, bell
   dropdown, "Mentions & activity" view.
-- **Desktop**: Preferences → Desktop notifications subscribes to Web Push. Pushes go out only for
-  `@mentions`, and only while the user has no live WebSocket (tab closed). Requires HTTPS or
-  `localhost`.
+- **Push**: Preferences → Push notifications subscribes the device to Web Push. New channel and DM
+  messages push to every member; each service worker shows the notification only when that device
+  has no focused window, so minimized tabs and installed PWAs still alert. The payload carries the
+  unread total, mirrored onto the app icon with the Badging API (where supported). Requires HTTPS
+  or `localhost`.
 - **Sound**: chime per incoming message (triple chime for mentions); toggle under Preferences →
   Message sounds. Stored per browser (`tc.sound`); the first click/keypress arms audio.
 

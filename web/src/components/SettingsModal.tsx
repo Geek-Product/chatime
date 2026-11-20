@@ -344,11 +344,11 @@ export function SettingsModal({
       if (pushOn) {
         await disablePush();
         setPushOn(false);
-        toast.success('Desktop notifications disabled');
+        toast.success('Push notifications disabled');
       } else {
         await enablePush();
         setPushOn(true);
-        toast.success('Desktop notifications enabled');
+        toast.success('Push notifications enabled');
       }
     } catch (err) {
       toast.error((err as Error).message);
@@ -479,10 +479,11 @@ export function SettingsModal({
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="flex items-center gap-2 font-semibold">
-                        <BellRing size={16} /> Desktop notifications
+                        <BellRing size={16} /> Push notifications
                       </p>
                       <p className="mt-1 text-sm text-zinc-600">
-                        Get an OS notification when someone @mentions you while the app is in the background or closed.
+                        Get an OS notification for new messages and @mentions while the app is minimized,
+                        in the background or closed. The app icon also shows an unread badge.
                       </p>
                       {!supported && (
                         <p className="mt-2 text-xs font-semibold text-amber-700">
@@ -495,7 +496,7 @@ export function SettingsModal({
                         </p>
                       )}
                     </div>
-                    <Toggle on={pushOn} disabled={!supported || busy} onClick={() => void toggle()} label="Toggle desktop notifications" />
+                    <Toggle on={pushOn} disabled={!supported || busy} onClick={() => void toggle()} label="Toggle push notifications" />
                   </div>
                 </div>
 

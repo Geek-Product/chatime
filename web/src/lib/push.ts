@@ -29,14 +29,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
   ]);
 }
 
-export async function enablePush(): Promise<void> {
+async function registerSubscription(): Promise<void> {
   const { publicKey, enabled } = await api.get<{ publicKey: string | null; enabled: boolean }>('/push/key');
-  if (!enabled || !publicKey) throw new Error('Desktop notifications are not configured on the server');
-
-  const permission = Notification.permission === 'granted'
-    ? 'granted'
-    : await Notification.requestPermission();
-  if (permission !== 'granted') throw new Error('Notification permission was denied');
+  if (!enabled || !publicKey) throw new Error('Push notifications are not configured on the server');
 
   const reg = await navigator.serviceWorker.ready;
   const sub = (await reg.pushManager.getSubscription())
@@ -51,6 +46,23 @@ export async function enablePush(): Promise<void> {
 
   const json = sub.toJSON();
   await api.post('/push/subscribe', { endpoint: json.endpoint, keys: json.keys });
+}
+
+export async function enablePush(): Promise<void> {
+  const permission = Notification.permission === 'granted'
+    ? 'granted'
+    : await Notification.requestPermission();
+  if (permission !== 'granted') throw new Error('Notification permission was denied');
+  await registerSubscription();
+}
+
+/**
+ * Re-registers when permission is already granted — e.g. the server lost the row or this
+ * device now reaches the app through a new origin. Never prompts.
+ */
+export async function ensurePushSubscription(): Promise<void> {
+  if (!pushSupported() || Notification.permission !== 'granted') return;
+  await registerSubscription();
 }
 
 export async function disablePush(): Promise<void> {

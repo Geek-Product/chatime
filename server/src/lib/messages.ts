@@ -1,6 +1,5 @@
 import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { env } from '../../env';
 import { db } from '../db/index';
 import { channelMembers, messageMentions, messages, reactions, users, workspaceMembers } from '../db/schema';
 import { attachmentsForMessages, toAttachmentDto } from './attachments';
@@ -179,16 +178,32 @@ export async function postMessage(input: {
 
   if (input.notify === false) return { inserted, mentionIds };
 
+  // Relative links so a push opened over localhost, a LAN IP or an HTTPS tunnel stays on that origin.
   const link = target.kind === 'channel'
-    ? `${env.APP_URL}/w/${workspaceId}/c/${target.channel.id}?m=${inserted.id}`
-    : `${env.APP_URL}/w/${workspaceId}/d/${target.conversationId}?m=${inserted.id}`;
-  // DMs always notify the other person; channels only notify the people mentioned.
-  const recipients = target.kind === 'channel'
+    ? `/w/${workspaceId}/c/${target.channel.id}?m=${inserted.id}`
+    : `/w/${workspaceId}/d/${target.conversationId}?m=${inserted.id}`;
+  // In-app toasts stay mention-only; every member whose unread counter moves also gets push,
+  // and the service worker hides it while that device is focused.
+  const notifiers = target.kind === 'channel'
     ? mentioned
     : visibleUsers.filter((u) => !silenced.has(u.id));
+  const pushAudience = (target.kind === 'channel' ? await channelAudience(target.channel) : visibleUsers)
+    .filter((u) => !silenced.has(u.id));
+
+  // One unread lookup per recipient, shared by the notification event and the push badge.
+  const countsByUser = new Map<string, { unread: number; mentions: number }>();
+  const countsFor = async (userId: string) => {
+    let counts = countsByUser.get(userId);
+    if (!counts) {
+      counts = await unreadTotal(userId, await workspaceIdsOf(userId));
+      countsByUser.set(userId, counts);
+    }
+    return counts;
+  };
+
   const recipientChannel = target.kind === 'channel' ? target.channel.id : null;
-  for (const u of recipients) {
-    const counts = await unreadTotal(u.id, await workspaceIdsOf(u.id));
+  for (const u of notifiers) {
+    const counts = await countsFor(u.id);
     hub.sendToUser(u.id, {
       type: 'notification',
       notification: {
@@ -205,14 +220,39 @@ export async function postMessage(input: {
       },
     });
   }
-  await sendPushToUsers(recipients.map((u) => u.id), {
-    title: target.kind === 'channel' ? `${author.displayName} mentioned you in #${target.channel.name}` : `New message from ${author.displayName}`,
-    body: plainSnippet(content),
-    url: link,
-    tag: target.kind === 'channel' ? `channel-${target.channel.id}` : `dm-${target.conversationId}`,
+  const mentionSet = new Set(mentionIds);
+  await sendPushToUsers(pushAudience.map((u) => u.id), async (userId) => {
+    const counts = await countsFor(userId);
+    return {
+      title: target.kind === 'channel'
+        ? mentionSet.has(userId)
+          ? `${author.displayName} mentioned you in #${target.channel.name}`
+          : `${author.displayName} in #${target.channel.name}`
+        : `New message from ${author.displayName}`,
+      body: plainSnippet(content),
+      url: link,
+      tag: target.kind === 'channel' ? `channel-${target.channel.id}` : `dm-${target.conversationId}`,
+      badge: counts.unread,
+    };
   });
 
   return { inserted, mentionIds };
+}
+
+/** Everyone whose unread counter moves: all workspace members for public channels, explicit members for private. */
+async function channelAudience(channel: { id: string; workspaceId: string; isPrivate: boolean }) {
+  const rows = channel.isPrivate
+    ? await db
+        .select({ id: users.id })
+        .from(users)
+        .innerJoin(channelMembers, eq(channelMembers.userId, users.id))
+        .where(eq(channelMembers.channelId, channel.id))
+    : await db
+        .select({ id: users.id })
+        .from(users)
+        .innerJoin(workspaceMembers, eq(workspaceMembers.userId, users.id))
+        .where(eq(workspaceMembers.workspaceId, channel.workspaceId));
+  return rows;
 }
 
 /** Live count of non-deleted replies under a parent, as shown in the parent's reply counter. */

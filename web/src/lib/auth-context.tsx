@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { type AuthResponse, api, applySession, bootstrapSession, logout as apiLogout, setAccessToken } from './api';
+import { syncAppBadge } from './badge';
 import { clearOfflineCache } from './offline';
 import { resetPresence } from './presence';
 import { socket } from './socket';
@@ -73,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Local sign-out must succeed even when the logout request cannot reach the server.
     await apiLogout().catch(() => {});
     clearOfflineCache(qc);
+    syncAppBadge(0);
     setAccessToken(null);
     setUser(null);
   }, [qc]);

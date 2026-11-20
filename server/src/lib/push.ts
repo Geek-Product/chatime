@@ -3,7 +3,6 @@ import { eq, inArray } from 'drizzle-orm';
 import { env } from '../../env';
 import { db } from '../db/index';
 import { pushSubscriptions } from '../db/schema';
-import { hub } from './hub';
 
 export const pushEnabled = Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY);
 
@@ -16,20 +15,28 @@ interface PushPayload {
   body: string;
   url: string;
   tag?: string;
+  /** Total unread for this user; the service worker mirrors it onto the app icon. */
+  badge?: number;
 }
 
-export async function sendPushToUsers(userIds: string[], payload: PushPayload) {
+type PayloadFor = (userId: string) => PushPayload | Promise<PushPayload>;
+
+/**
+ * Sends to every device subscription. Whether the notification is shown is decided in the
+ * service worker: it suppresses the alert only when that device has a focused window. The
+ * server can't use socket presence (a minimized phone keeps its socket), so it always sends.
+ */
+export async function sendPushToUsers(userIds: string[], payload: PushPayload | PayloadFor) {
   if (!pushEnabled || userIds.length === 0) return;
   const subs = await db.select().from(pushSubscriptions).where(inArray(pushSubscriptions.userId, userIds));
   const stale: string[] = [];
 
   await Promise.allSettled(subs.map(async (sub) => {
-    // Only ping users who aren't currently looking at the app.
-    if (hub.isOnline(sub.userId)) return;
     try {
+      const body = typeof payload === 'function' ? await payload(sub.userId) : payload;
       await webpush.sendNotification(
         { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        JSON.stringify(payload),
+        JSON.stringify(body),
         { TTL: 60 * 60 },
       );
     } catch (err) {
