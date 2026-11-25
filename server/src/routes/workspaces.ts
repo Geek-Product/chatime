@@ -100,13 +100,14 @@ export default async function workspaceRoutes(app: FastifyInstance) {
   app.get('/workspaces/:workspaceId/members/:userId', async (req) => {
     const user = requireUser(req);
     const { workspaceId, userId } = z.object({ workspaceId: z.string().uuid(), userId: z.string().uuid() }).parse(req.params);
-    await assertWorkspaceMember(workspaceId, user.id);
+    const me = await assertWorkspaceMember(workspaceId, user.id);
     const [row] = await db
       .select({
         id: users.id,
         username: users.username,
         displayName: users.displayName,
         title: users.title,
+        email: users.email,
         avatarColor: users.avatarColor,
         avatarAttachmentId: users.avatarAttachmentId,
         createdAt: users.createdAt,
@@ -118,8 +119,10 @@ export default async function workspaceRoutes(app: FastifyInstance) {
       .innerJoin(users, eq(users.id, workspaceMembers.userId))
       .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)));
     if (!row) throw notFound('This person is not a member of this workspace');
-    const { avatarAttachmentId, ...member } = row;
-    return { member: { ...member, avatarUrl: avatarUrl(avatarAttachmentId) } };
+    const { avatarAttachmentId, email, ...member } = row;
+    // Same rule as the member list: only owners/admins see other people's addresses (and everyone sees their own).
+    const canSeeEmail = !member.bot && (userId === user.id || me.role !== 'member');
+    return { member: { ...member, avatarUrl: avatarUrl(avatarAttachmentId), email: canSeeEmail ? email : null } };
   });
 
   app.patch('/workspaces/:workspaceId/members/:userId', async (req) => {

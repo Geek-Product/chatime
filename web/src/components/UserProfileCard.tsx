@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Briefcase, Mail, MessageSquare, Pencil, Shield, UserRound, Webhook, X } from 'lucide-react';
+import { Briefcase, CalendarDays, Mail, MessageSquare, Pencil, Shield, UserRound, Webhook, X } from 'lucide-react';
 import { Avatar } from './Avatar';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
@@ -14,6 +14,8 @@ interface ProfileResponse {
     username: string;
     displayName: string;
     title: string | null;
+    /** Null unless the viewer is an owner/admin (or this is the viewer's own profile). */
+    email: string | null;
     avatarColor: string;
     avatarUrl: string | null;
     createdAt: string;
@@ -52,6 +54,8 @@ export function UserProfileCard() {
   const member = data?.member;
   const me = userRef.current;
   const isMe = me?.id === target.userId;
+  // The API withholds other people's addresses from plain members; your own is always shown.
+  const email = member?.email ?? (isMe ? me?.email : null);
   // After a profile edit the card shows the new name/color immediately, without reopening it.
   const shown = isMe && me
     ? { ...target, displayName: me.displayName, username: me.username, avatarColor: me.avatarColor, avatarUrl: me.avatarUrl }
@@ -83,7 +87,6 @@ export function UserProfileCard() {
             @{shown.username}
             {isMe && <span className="ml-1 text-xs text-zinc-400">you</span>}
           </p>
-          {isMe && <p className="mt-1 truncate text-xs text-zinc-500">{me.email}</p>}
           <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold">
             <span className={`inline-block h-2 w-2 rounded-full ${target.online ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
             <span className={target.online ? 'text-emerald-700' : 'text-zinc-500'}>{target.online ? 'Online' : 'Offline'}</span>
@@ -92,6 +95,15 @@ export function UserProfileCard() {
           {error && <p className="mt-3 rounded bg-red-50 px-2 py-1.5 text-xs text-red-700">{(error as Error).message}</p>}
 
           <dl className="mt-3 space-y-1.5 rounded-lg border border-line bg-panel px-3 py-2 text-xs text-zinc-700">
+            {email && (
+              <div className="flex items-center gap-2">
+                <Mail size={13} className="text-zinc-500" />
+                <dt className="text-zinc-500">Email</dt>
+                <dd className="ml-auto max-w-[65%] truncate font-semibold" title={email}>
+                  <a href={`mailto:${email}`} className="hover:underline">{email}</a>
+                </dd>
+              </div>
+            )}
             {member?.title && (
               <div className="flex items-center gap-2">
                 <Briefcase size={13} className="text-zinc-500" />
@@ -112,7 +124,7 @@ export function UserProfileCard() {
               <dd className="ml-auto font-semibold">{isLoading ? '…' : joined(member?.joinedAt)}</dd>
             </div>
             <div className="flex items-center gap-2">
-              <Mail size={13} className="text-zinc-500" />
+              <CalendarDays size={13} className="text-zinc-500" />
               <dt className="text-zinc-500">Account created</dt>
               <dd className="ml-auto font-semibold">{isLoading ? '…' : joined(member?.createdAt)}</dd>
             </div>

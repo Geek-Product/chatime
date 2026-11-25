@@ -20,18 +20,23 @@ function relative(iso: string) {
 export function TopBar({
   channel,
   dm,
+  title,
   membersOpen,
   onToggleSidebar,
   onToggleMembers,
+  showMembersToggle = true,
   onOpenMention,
   onOpenProfile,
   onEditChannel,
 }: {
   channel: Channel | null;
   dm?: { id: string; displayName: string; username: string; avatarColor: string; avatarUrl?: string | null; online: boolean } | null;
+  /** Used when there is neither a channel nor a DM (mentions, calendar, …). */
+  title?: string;
   membersOpen: boolean;
   onToggleSidebar: () => void;
   onToggleMembers: () => void;
+  showMembersToggle?: boolean;
   onOpenMention: (m: SavedMention) => void;
   onOpenProfile?: (dm: { id: string; displayName: string; username: string; avatarColor: string; avatarUrl?: string | null; online: boolean }) => void;
   onEditChannel?: () => void;
@@ -101,7 +106,7 @@ export function TopBar({
             </span>
           </>
         ) : (
-          <span>Mentions & activity</span>
+          <span>{title ?? 'Mentions & activity'}</span>
         )}
       </div>
 
@@ -155,7 +160,7 @@ export function TopBar({
           )}
         </div>
 
-        {!dm && (
+        {!dm && showMembersToggle && (
           <button
             type="button"
             onClick={onToggleMembers}

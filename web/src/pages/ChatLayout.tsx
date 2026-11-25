@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -14,6 +14,7 @@ import { UserProfileCard } from '../components/UserProfileCard';
 import { Avatar } from '../components/Avatar';
 import { OfflineBanner } from '../components/OfflineBanner';
 import MentionsView from './MentionsView';
+import CalendarView from './CalendarView';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import { useRealtime } from '../lib/useRealtime';
@@ -60,6 +61,7 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { workspaceId, channelId, conversationId } = useParams();
+  const { pathname } = useLocation();
   const online = useOnlineUsers();
   const [searchParams, setSearchParams] = useSearchParams();
   const threadId = searchParams.get('thread');
@@ -105,7 +107,8 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
     () => workspaces.find((w) => w.id === workspaceId) ?? workspaces[0],
     [workspaces, workspaceId],
   );
-  const isMentionsView = !channelId && !conversationId;
+  const isCalendarView = pathname.endsWith('/calendar');
+  const isMentionsView = !channelId && !conversationId && !isCalendarView;
 
   useEffect(() => {
     // Pending accounts are handled by App, which shows the waiting screen instead of this layout.
@@ -650,6 +653,8 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
       <main className="flex min-w-0 flex-1 flex-col bg-white">
         <TopBar
           channel={channel}
+          title={isCalendarView ? 'Team calendar' : undefined}
+          showMembersToggle={!isCalendarView}
           dm={conversation
             ? {
                 id: conversation.other.id,
@@ -700,7 +705,9 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
         )}
 
         <div className="flex min-h-0 flex-1">
-          {isMentionsView ? (
+          {isCalendarView ? (
+            <CalendarView workspaceId={workspace.id} meId={me.id} isAdmin={isAdmin} />
+          ) : isMentionsView ? (
             <MentionsView
               onOpen={openMention}
               meUsername={me.username}
@@ -764,7 +771,7 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
             />
           )}
 
-          {membersOpen && !isMentionsView && !conversation && (
+          {membersOpen && !isMentionsView && !isCalendarView && !conversation && (
             <>
               <div
                 className="fixed inset-0 z-40 bg-black/40 xl:hidden"

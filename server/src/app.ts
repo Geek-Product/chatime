@@ -18,6 +18,7 @@ import { hub } from './lib/hub';
 import accessRoutes from './routes/access';
 import attachmentRoutes from './routes/attachments';
 import authRoutes from './routes/auth';
+import calendarRoutes from './routes/calendar';
 import channelRoutes from './routes/channels';
 import conversationRoutes from './routes/conversations';
 import messageRoutes from './routes/messages';
@@ -88,6 +89,7 @@ export async function buildApp() {
     await scope.register(authRoutes);
     await scope.register(accessRoutes);
     await scope.register(workspaceRoutes);
+    await scope.register(calendarRoutes);
     await scope.register(channelRoutes);
     await scope.register(conversationRoutes);
     await scope.register(messageRoutes);

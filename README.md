@@ -86,7 +86,7 @@ team-chat/
 │   │   ├── routes/           # HTTP endpoints + /ws, all mounted under /api
 │   │   │   ├── auth.ts          channels.ts   conversations.ts  messages.ts
 │   │   │   ├── notifications.ts push.ts       attachments.ts    workspaces.ts
-│   │   │   ├── access.ts        ws.ts         webhooks.ts
+│   │   │   ├── access.ts        ws.ts         webhooks.ts       calendar.ts
 │   │   └── types.d.ts        # Fastify decorators
 │   └── uploads/              # attachment storage (gitignored; path = UPLOAD_DIR)
 │
@@ -95,12 +95,13 @@ team-chat/
     ├── public/               # gifs and stickers
     └── src/
         ├── main.tsx          # providers: Query, Auth, Router, Theme, Profile
-        ├── App.tsx           # routes: /login, /welcome, /w/:wsId/(c|d)/:id, /mentions
+        ├── App.tsx           # routes: /login, /welcome, /w/:wsId/(c|d)/:id, /mentions, /calendar
         ├── pages/
         │   ├── ChatLayout.tsx       # main app shell
         │   ├── LoginPage.tsx        # sign in / sign up
         │   ├── AccessPendingPage.tsx# waiting-for-approval screen
-        │   └── MentionsView.tsx
+        │   ├── MentionsView.tsx
+        │   └── CalendarView.tsx     # team out-of-office calendar
         ├── components/       # Sidebar, MessageList/Item/Text, Composer, ThreadPanel,
         │                     # SettingsModal, MemberPicker, SignupsDialog, …
         └── lib/
@@ -217,6 +218,7 @@ Errors are `{ "error": { "code": "…", "message": "…" } }`.
 | **Auth** | `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`¹, `POST /auth/logout`¹, `GET /auth/me`, `PATCH /auth/me`, `POST /auth/password` |
 | **Access** | `GET /access/me`, `GET /access/workspaces`, `GET /workspaces/:id/access-requests`, `POST /workspaces/:id/access-requests/:userId/approve`, `…/decline` |
 | **Workspaces** | `GET /workspaces`, `POST /workspaces`, `PATCH /workspaces/:id`, `GET /workspaces/:id/members`, `GET /workspaces/:id/members/:userId` |
+| **Calendar** | `GET/POST /workspaces/:id/absences`, `DELETE /workspaces/:id/absences/:absenceId` |
 | **Channels** | `GET/POST /workspaces/:id/channels`, `PATCH /channels/:id`, `POST /channels/:id/join`, `GET/POST /channels/:id/members`, `DELETE /channels/:id/members/:userId`, `GET /channels/:id/members`, `POST /channels/:id/read`, `GET /channels/:id/messages`, `GET /channels/:id/history` |
 | **DMs** | `GET/POST /workspaces/:id/conversations`, `POST /dms/:id/read`, `GET /dms/:id/messages`, `GET /dms/:id/history` |
 | **Messages** | `POST /messages`, `PATCH /messages/:id`, `DELETE /messages/:id`, `GET /messages/:id`, `GET /messages/:id/replies`, `GET /messages/:id/location`, `POST /messages/:id/reactions` |
@@ -291,6 +293,14 @@ previews, and the same realtime behaviour as channels. Threads are channel-only.
   `Ctrl/Cmd+Enter`.
 - **Edit last**: pressing `↑` in an empty composer loads your most recent message for editing.
 
+### Team calendar
+
+The **Team calendar** entry in the sidebar opens a month view of who is away from the office
+(`GET /workspaces/:id/absences?from=YYYY-MM-DD&to=YYYY-MM-DD`). **Mark me out** records inclusive
+first/last days plus an optional note; anyone can remove their own entries, and workspace
+owners/admins can remove anyone's. The view lists who is out today, the people away on the
+selected day, and everything coming up in the visible range.
+
 ### Notifications
 
 - **In-app**: unread badges, bold channel names, tab title `(n) Team Chat`, mention toast, bell
@@ -320,7 +330,8 @@ previews, and the same realtime behaviour as channels. Threads are channel-only.
 ### Profiles and appearance
 
 - Click any name or avatar to open a profile card (`GET /workspaces/:id/members/:userId`): role,
-  join date, account age, online status, **Message** button.
+  join date, account age, email, online status, **Message** button. Emails are only included for
+  workspace owners/admins (and for your own card); plain members see the rest without them.
 - **Change password** (Preferences → Password): verifies the current password, stores an Argon2
   hash, revokes all refresh tokens (other devices are signed out), and issues a fresh session.
   Rate limited to 10 attempts/minute.

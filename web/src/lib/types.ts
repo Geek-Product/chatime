@@ -88,6 +88,21 @@ export interface Member extends Pick<User, 'id' | 'username' | 'displayName' | '
   email?: string | null;
 }
 
+/** A member's time away from the office, shown on the team calendar. Dates are inclusive YYYY-MM-DD days. */
+export interface OfficeAbsence {
+  id: string;
+  userId: string;
+  displayName: string;
+  username: string;
+  title: string | null;
+  avatarColor: string;
+  avatarUrl: string | null;
+  startDate: string;
+  endDate: string;
+  note: string | null;
+  mine: boolean;
+}
+
 /** A person shown in channel member pickers (workspace or channel membership). */
 export type ChannelPerson = Pick<User, 'id' | 'username' | 'displayName' | 'avatarColor' | 'avatarUrl'>;
 

@@ -135,6 +135,15 @@ CREATE TABLE "chatime"."webhooks" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "webhooks_token_hash_unique" UNIQUE("token_hash")
 );
+CREATE TABLE "chatime"."office_absences" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"workspace_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	"start_date" date NOT NULL,
+	"end_date" date NOT NULL,
+	"note" varchar(160),
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
 CREATE TABLE "chatime"."workspace_members" (
 	"workspace_id" uuid NOT NULL,
 	"user_id" uuid NOT NULL,
@@ -173,6 +182,8 @@ ALTER TABLE "chatime"."reactions" ADD CONSTRAINT "reactions_message_id_messages_
 ALTER TABLE "chatime"."reactions" ADD CONSTRAINT "reactions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "chatime"."users"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "chatime"."refresh_tokens" ADD CONSTRAINT "refresh_tokens_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "chatime"."users"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "chatime"."webhook_deliveries" ADD CONSTRAINT "webhook_deliveries_webhook_id_webhooks_id_fk" FOREIGN KEY ("webhook_id") REFERENCES "chatime"."webhooks"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "chatime"."office_absences" ADD CONSTRAINT "office_absences_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "chatime"."workspaces"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "chatime"."office_absences" ADD CONSTRAINT "office_absences_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "chatime"."users"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "chatime"."webhooks" ADD CONSTRAINT "webhooks_channel_id_channels_id_fk" FOREIGN KEY ("channel_id") REFERENCES "chatime"."channels"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "chatime"."webhooks" ADD CONSTRAINT "webhooks_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "chatime"."workspaces"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "chatime"."webhooks" ADD CONSTRAINT "webhooks_bot_user_id_users_id_fk" FOREIGN KEY ("bot_user_id") REFERENCES "chatime"."users"("id") ON DELETE no action ON UPDATE no action;
@@ -192,6 +203,7 @@ CREATE INDEX "message_mentions_user_idx" ON "chatime"."message_mentions" USING b
 CREATE INDEX "messages_channel_created_idx" ON "chatime"."messages" USING btree ("channel_id","created_at");
 CREATE INDEX "messages_dm_created_idx" ON "chatime"."messages" USING btree ("direct_conversation_id","created_at");
 CREATE INDEX "messages_parent_idx" ON "chatime"."messages" USING btree ("parent_id") WHERE "chatime"."messages"."parent_id" is not null;
+CREATE INDEX "office_absences_workspace_range_idx" ON "chatime"."office_absences" USING btree ("workspace_id","start_date","end_date");
 CREATE INDEX "push_subscriptions_user_idx" ON "chatime"."push_subscriptions" USING btree ("user_id");
 CREATE INDEX "refresh_tokens_user_idx" ON "chatime"."refresh_tokens" USING btree ("user_id");
 CREATE UNIQUE INDEX "users_email_unique" ON "chatime"."users" USING btree (lower("email"));

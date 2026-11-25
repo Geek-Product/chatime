@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AtSign, ChevronDown, Hash, Lock, Pencil, Plus, Settings, UserPlus, X, UserCheck } from 'lucide-react';
+import { AtSign, CalendarDays, ChevronDown, Hash, Lock, Pencil, Plus, Settings, UserPlus, X, UserCheck } from 'lucide-react';
 import clsx from 'clsx';
 import { toast } from 'sonner';
 import { Avatar } from './Avatar';
@@ -787,6 +787,18 @@ export function Sidebar({
           {unreadMentions > 0 && (
             <span className="ml-auto rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">{unreadMentions}</span>
           )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => navigate(`/w/${workspace.id}/calendar`)}
+          className={clsx(
+            'mb-2 flex w-full items-center gap-2 rounded-md px-2 py-1 text-sm',
+            location.pathname.endsWith('/calendar') ? 'bg-brand-yellow font-bold text-ink' : 'text-white/70 hover:bg-white/10',
+          )}
+        >
+          <CalendarDays size={14} />
+          <span>Team calendar</span>
         </button>
 
         {isAdmin && (

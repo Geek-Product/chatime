@@ -75,6 +75,7 @@ export default function App() {
       <Route path="/w/:workspaceId/c/:channelId" element={<ChatLayoutRoute />} />
       <Route path="/w/:workspaceId/d/:conversationId" element={<ChatLayoutRoute />} />
       <Route path="/w/:workspaceId/mentions" element={<ChatLayoutRoute />} />
+      <Route path="/w/:workspaceId/calendar" element={<ChatLayoutRoute />} />
       <Route path="/w/:workspaceId" element={<ChatLayoutRoute />} />
       <Route path="*" element={<WorkspaceRedirect />} />
     </Routes>

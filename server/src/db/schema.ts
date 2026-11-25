@@ -1,6 +1,7 @@
 import { relations, sql } from 'drizzle-orm';
 import {
   boolean,
+  date,
   index,
   integer,
   pgEnum,
@@ -214,6 +215,17 @@ export const webhookDeliveries = pgTable('webhook_deliveries', {
   payloadBytes: integer('payload_bytes'),
   createdAt: createdAt(),
 }, (t) => [index('webhook_deliveries_webhook_idx').on(t.webhookId, t.createdAt)]);
+
+/** Days a member is away from the office, shown on the team calendar. Dates are inclusive calendar days. */
+export const officeAbsences = pgTable('office_absences', {
+  id: id(),
+  workspaceId: uuid('workspace_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  startDate: date('start_date', { mode: 'string' }).notNull(),
+  endDate: date('end_date', { mode: 'string' }).notNull(),
+  note: varchar('note', { length: 160 }),
+  createdAt: createdAt(),
+}, (t) => [index('office_absences_workspace_range_idx').on(t.workspaceId, t.startDate, t.endDate)]);
 
 export const usersRelations = relations(users, ({ many }) => ({
   memberships: many(workspaceMembers),
