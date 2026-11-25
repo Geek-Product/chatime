@@ -101,6 +101,20 @@ jobs:
             fi
           done
 
+          if [[ "$APP_URL" != https://* ]]; then
+            echo "::warning::APP_URL is not https:// - browsers only allow Web Push on secure origins"
+          fi
+
+          # Web Push is optional: forward the keys only when Infisical defines both.
+          if [ -n "${VAPID_PUBLIC_KEY:-}" ] && [ -n "${VAPID_PRIVATE_KEY:-}" ]; then
+            VAPID_SUBJECT="${VAPID_SUBJECT:-mailto:admin@example.com}"
+          else
+            VAPID_PUBLIC_KEY=""
+            VAPID_PRIVATE_KEY=""
+            VAPID_SUBJECT=""
+            echo "::warning::VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY missing from Infisical - Web Push will be disabled"
+          fi
+
           printf '%s\n' \
             "PORT=4001" \
             "CHATIME_PORT=4001" \
@@ -112,7 +126,10 @@ jobs:
             "UPLOAD_MAX_MB=$UPLOAD_MAX_MB" \
             "JWT_SECRET=$JWT_SECRET" \
             "ACCESS_TOKEN_TTL=15m" \
-            "REFRESH_TOKEN_TTL_DAYS=30" > .env.rendered
+            "REFRESH_TOKEN_TTL_DAYS=30" \
+            "VAPID_PUBLIC_KEY=$VAPID_PUBLIC_KEY" \
+            "VAPID_PRIVATE_KEY=$VAPID_PRIVATE_KEY" \
+            "VAPID_SUBJECT=$VAPID_SUBJECT" > .env.rendered
           chmod 600 .env.rendered
 
       - name: Prepare SSH

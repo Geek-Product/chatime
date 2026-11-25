@@ -400,5 +400,25 @@ and `deploy/deploy.sh` to `/opt/chatime`, writes that environment's secrets from
 `docker compose up -d --no-build`. Infisical must define `CHATIME_DATABASE_URL`, `JWT_SECRET`,
 `APP_URL`, `VAPID_*` and `UPLOAD_MAX_MB`.
 
+### Enabling Web Push on a deployed server
+
+Three things must be true on the server, otherwise the app runs without notifications:
+
+1. **HTTPS.** Browsers only expose service workers and `PushManager` on secure origins
+   (`https://…`, or `http://localhost`). If the app is opened as `http://<server-ip>:4001`, push
+   cannot work. Put the container behind TLS (reverse proxy or tunnel) and set `APP_URL` to that
+   `https://` URL.
+2. **VAPID keys in the server environment.** `npm run gen:vapid` generates a pair in `.env`; add
+   `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT=mailto:you@example.com` to the same
+   Infisical environment. The deploy workflow writes them into `/opt/chatime/.env`. Generate the
+   pair once and keep it: changing the keys invalidates every existing subscription.
+3. **One subscription per browser/device.** After redeploying, open the app over HTTPS and click
+   **Enable** in the banner (or Preferences → Push notifications), then allow notifications in the
+   browser prompt.
+
+Confirm it took effect with `docker compose logs --tail 50 app` — the line
+`[push] Web Push is disabled ...` must be absent — and with `GET /api/push/key` from a logged-in
+session, which should return `{ "enabled": true }`.
+
 `npm start` serves the API and the built SPA (`web/dist`) from one process; unknown non-`/api` paths
 fall back to `index.html` for client-side routing.
