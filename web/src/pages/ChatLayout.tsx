@@ -178,7 +178,7 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
     void ensurePushSubscription().catch(() => {});
   }, []);
 
-  // Mobile browsers never offer the permission prompt on their own; offer it once here.
+  // Browsers never prompt for notification permission on their own; offer it once here.
   const [notifyPromptOpen, setNotifyPromptOpen] = useState(
     () => pushSupported() && Notification.permission === 'default' && localStorage.getItem(NOTIFY_PROMPT_KEY) !== '1',
   );
@@ -684,7 +684,7 @@ export default function ChatLayout({ isAdmin = false }: { isAdmin?: boolean }) {
         />
 
         {notifyPromptOpen && (
-          <div className="flex items-center gap-2 border-b border-line bg-accent-soft px-3 py-2 text-xs text-ink md:hidden">
+          <div className="flex items-center gap-2 border-b border-line bg-accent-soft px-3 py-2 text-xs text-ink">
             <span className="min-w-0 flex-1">Get notified about new messages while the app is minimized.</span>
             <button
               type="button"

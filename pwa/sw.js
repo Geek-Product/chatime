@@ -155,6 +155,8 @@ self.addEventListener('push', (event) => {
     await self.registration.showNotification(payload.title ?? 'Team Chat', {
       body: payload.body ?? '',
       tag: payload.tag,
+      // Without this, a second message in the same channel would replace the first silently.
+      renotify: Boolean(payload.tag),
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',
       data: { url: payload.url ?? '/' },
@@ -177,15 +179,20 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const target = new URL(event.notification.data?.url ?? '/', self.location.origin).href;
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      for (const client of clients) {
-        if (new URL(client.url).origin === self.location.origin) {
-          client.focus();
-          client.navigate(target);
+    (async () => {
+      const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const existing = clients.find((client) => new URL(client.url).origin === self.location.origin);
+      if (existing) {
+        // Focus can be denied (e.g. no window manager); a failed focus must not block navigation.
+        await existing.focus().catch(() => {});
+        try {
+          await existing.navigate(target);
           return;
+        } catch {
+          /* fall through to a fresh window */
         }
       }
-      return self.clients.openWindow(target);
-    }),
+      await self.clients.openWindow(target);
+    })(),
   );
 });

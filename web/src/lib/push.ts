@@ -10,6 +10,9 @@ function urlBase64ToUint8Array(base64String: string) {
 export const pushSupported = () =>
   'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 
+/** Explicit opt-out must survive reloads, otherwise ensurePushSubscription would silently undo it. */
+const PUSH_OPT_OUT_KEY = 'tc.pushOptOut';
+
 export async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return null;
   return navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' });
@@ -54,6 +57,7 @@ export async function enablePush(): Promise<void> {
     : await Notification.requestPermission();
   if (permission !== 'granted') throw new Error('Notification permission was denied');
   await registerSubscription();
+  localStorage.removeItem(PUSH_OPT_OUT_KEY);
 }
 
 /**
@@ -62,10 +66,12 @@ export async function enablePush(): Promise<void> {
  */
 export async function ensurePushSubscription(): Promise<void> {
   if (!pushSupported() || Notification.permission !== 'granted') return;
+  if (localStorage.getItem(PUSH_OPT_OUT_KEY) === '1') return;
   await registerSubscription();
 }
 
 export async function disablePush(): Promise<void> {
+  localStorage.setItem(PUSH_OPT_OUT_KEY, '1');
   const reg = await navigator.serviceWorker.ready;
   const sub = await reg.pushManager.getSubscription();
   if (!sub) return;

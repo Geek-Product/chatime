@@ -112,13 +112,13 @@ export async function webhookReceiverRoutes(app: FastifyInstance) {
           },
         });
       }
-      await sendPushToUsers(recipients, (userId) => ({
+      void sendPushToUsers(recipients, (userId) => ({
         title: `${hook.name} posted in #${channel.name}`,
         body: snippet,
         url: `/w/${hook.workspaceId}/c/${channel.id}?m=${inserted.id}`,
         tag: `channel-${channel.id}`,
         badge: unreadByRecipient.get(userId)?.unread ?? 0,
-      }));
+      })).catch(() => {});
     }
 
     return reply.code(201).send({ ok: true, messageId: inserted.id });

@@ -221,7 +221,8 @@ export async function postMessage(input: {
     });
   }
   const mentionSet = new Set(mentionIds);
-  await sendPushToUsers(pushAudience.map((u) => u.id), async (userId) => {
+  // Push goes out after the response: a slow or failing push service must not fail the send.
+  void sendPushToUsers(pushAudience.map((u) => u.id), async (userId) => {
     const counts = await countsFor(userId);
     return {
       title: target.kind === 'channel'
@@ -234,7 +235,7 @@ export async function postMessage(input: {
       tag: target.kind === 'channel' ? `channel-${target.channel.id}` : `dm-${target.conversationId}`,
       badge: counts.unread,
     };
-  });
+  }).catch(() => {});
 
   return { inserted, mentionIds };
 }
